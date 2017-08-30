@@ -1,0 +1,10 @@
+#!/bin/sh
+
+echo "buniq - bootstrap"
+aclocal
+automake --gnu --add-missing
+autoheader
+autoconf
+
+./configure --enable-debug --enable-memdebug
+
