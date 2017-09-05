@@ -1,145 +1,161 @@
 /*****
- *
- * $Id: bloom.c,v 1.1.1.1 2013/03/21 01:17:35 rdilley Exp $
- *
- * Copyright (c) 2013, Ron Dilley
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *   - Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   - Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   - Neither the name of Uberadmin/BaraCUDA/Nightingale nor the names of
- *     its contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
- * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
- * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- *****/
+*
+* Description: bloom filter functions
+*
+* Copyright (c) 2008-2017, Ron Dilley
+* All rights reserved.
+*
+* This program is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*
+****/
 
 /****
- *
- * defines
- *
- ****/
+*
+* defines
+*
+****/
 
 /****
- *
- * includes
- *
- ****/
+*
+* includes
+*
+****/
 
 #include "bloom.h"
 
 /****
- *
- * local variables
- *
- ****/
-
-PRIVATE char *cvsid = "$Id: bloom.c,v 1.1.1.1 2013/03/21 01:17:35 rdilley Exp $";
-
-/* force selection of good primes */
-//size_t hashPrimes[] = { 53,97,193,389,769,1543,3079,6151,12289,24593,49157,98317,196613,393241,786433,1572869,3145739,6291469,12582917,25165843,50331653,100663319,201326611,402653189,805306457,1610612741,0 };
+*
+* local variables
+*
+****/
 
 /****
- *
- * external global variables
- *
- ****/
+*
+* external global variables
+*
+****/
 
 extern Config_t *config;
 
 /****
- *
- * functions
- *
- ****/
+*
+* functions
+*
+****/
 
-#include<limits.h>
-#include<stdarg.h>
+#include <limits.h>
+#include <math.h>
+#include <stdio.h>
+#include <string.h>
 
-#include"bloom.h"
+#include "murmur.h"
+#include "bloom.h"
 
-#define SETBIT(a, n) (a[n/CHAR_BIT] |= (1<<(n%CHAR_BIT)))
-#define GETBIT(a, n) (a[n/CHAR_BIT] & (1<<(n%CHAR_BIT)))
-
-BLOOM *bloom_create(size_t size, size_t nfuncs, ...)
+static gboolean cb_contains_always(gpointer user, const gchar *string, gsize length)
 {
-  BLOOM *bloom;
-  va_list l;
-  int n;
-  
-  if(!(bloom=malloc(sizeof(BLOOM)))) return NULL;
-  if(!(bloom->a=calloc((size+CHAR_BIT-1)/CHAR_BIT, sizeof(char)))) {
-    free(bloom);
-    return NULL;
-  }
-  if(!(bloom->funcs=(hashfunc_t*)malloc(nfuncs*sizeof(hashfunc_t)))) {
-    free(bloom->a);
-    free(bloom);
-    return NULL;
-  }
-  
-  va_start(l, nfuncs);
-  for(n=0; n<nfuncs; ++n) {
-    bloom->funcs[n]=va_arg(l, hashfunc_t);
-  }
-  va_end(l);
-  
-  bloom->nfuncs=nfuncs;
-  bloom->asize=size;
-  
-  return bloom;
+    return TRUE;
 }
 
-int bloom_destroy(BLOOM *bloom)
+BloomFilter * bloom_filter_new(gsize filter_size, gsize num_hashes, BloomContains contains, gpointer user)
 {
-  free(bloom->a);
-  free(bloom->funcs);
-  free(bloom);
-  
-  return 0;
-}
+    BloomFilter	*bf;
+    const gsize	bits_length = (filter_size + (CHAR_BIT * sizeof *bf->bits) - 1) / (CHAR_BIT * sizeof *bf->bits);
+    const gsize	bits_size = bits_length * sizeof *bf->bits;
 
-int bloom_add(BLOOM *bloom, const char *s)
-{
-  size_t n;
-  int new = 0;
-  
-  for(n=0; n<bloom->nfuncs; ++n) {
-    if(!(GETBIT(bloom->a, bloom->funcs[n](s)%bloom->asize))) {
-      SETBIT(bloom->a, bloom->funcs[n](s)%bloom->asize);
-      new = 1;
+    if((bf = g_malloc(sizeof *bf + bits_size)) != NULL)
+    {
+        bf->m = filter_size;
+        bf->k = num_hashes;
+        bf->size = 0;
+        bf->bits = (gulong *) (bf + 1);
+        bf->bits_length = bits_length;
+        bf->contains = contains != NULL ? contains : cb_contains_always;
+        bf->user = user;
+        memset(bf->bits, 0, bits_size);
     }
-  }
-  
-  return new;
+    return bf;
 }
 
-int bloom_check(BLOOM *bloom, const char *s)
+BloomFilter * bloom_filter_new_with_probability(gfloat prob, gsize num_elements, BloomContains contains, gpointer user)
 {
-  size_t n;
-  
-  for(n=0; n<bloom->nfuncs; ++n) {
-    if(!(GETBIT(bloom->a, bloom->funcs[n](s)%bloom->asize))) return 0;
-  }
-  
-  return 1;
+    const gfloat	m = -(num_elements * logf(prob)) / powf(log(2.f), 2.f);
+    const gfloat	k = logf(2.f) * m / num_elements;
+
+    printf("computed bloom filter size %f -> %u bytes\n", m, (guint) (m + .5f) / 8);
+    printf(" so m/n = %.1f\n", m / num_elements);
+    printf(" which gives k=%f\n", k);
+
+    return bloom_filter_new((gsize) (m + .5f), (guint) (k + 0.5f), contains, user);
 }
+
+void bloom_filter_destroy(BloomFilter *bf)
+{
+    g_free(bf);
+}
+
+gsize bloom_filter_num_bits(const BloomFilter *bf)
+{
+    return bf->m;
+}
+
+gsize bloom_filter_num_hashes(const BloomFilter *bf)
+{
+    return bf->k;
+}
+
+gsize bloom_filter_size(const BloomFilter *bf)
+{
+    return bf->size;
+}
+
+void bloom_filter_insert(BloomFilter *bf, const gchar *string, gssize string_length)
+{
+    const gsize	len = string_length > 0 ? string_length : strlen(string);
+    gsize		i;
+
+    /* Repeatedly hash the string, and set bits in the Bloom filter's bit array. */
+    for(i = 0; i < bf->k; i++)
+    {
+        const guint32	hash = MurmurHash2(string, len, i);
+        const gsize	pos = hash % bf->m;
+        const gsize	slot = pos / (CHAR_BIT * sizeof *bf->bits);
+        const gsize	bit = pos % (CHAR_BIT * sizeof *bf->bits);
+
+        printf("hash(%s,%zu)=%u -> pos=%zu -> slot=%zu, bit=%zu\n", string, i, hash, pos, slot, bit);
+        bf->bits[slot] |= 1UL << bit;
+    }
+    bf->size++;
+}
+
+gboolean bloom_filter_contains(const BloomFilter *bf, const gchar *string, gssize string_length)
+{
+    const gsize	len = string_length > 0 ? string_length : strlen(string);
+    gsize		i;
+
+    /* Check the Bloom filter, by hashing and checking bits. */
+    for(i = 0; i < bf->k; i++)
+    {
+        const guint32	hash = MurmurHash2(string, len, i);
+        const gsize	pos = hash % bf->m;
+        const gsize	slot = pos / (CHAR_BIT * sizeof *bf->bits);
+        const gsize	bit = pos % (CHAR_BIT * sizeof *bf->bits);
+
+        /* If a bit is not set, the element is not contained, for sure. */
+        if((bf->bits[slot] & (1UL << bit)) == 0)
+            return FALSE;
+    }
+    /* Bit-checking says yes, call user's contains() function to make sure. */
+    return bf->contains(bf->user, string, len);
+}
+

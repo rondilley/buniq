@@ -150,6 +150,50 @@ int is_dir_safe( const char *dir ) {
 
 /****
  *
+ * display output
+ *
+ ****/
+
+int display( int level, char *format, ... ) {
+  PRIVATE va_list args;
+  PRIVATE char tmp_buf[SYSLOG_MAX];
+  PRIVATE int i;
+
+  va_start( args, format );
+  vsprintf( tmp_buf, format, args );
+  if ( tmp_buf[strlen(tmp_buf)-1] == '\n' ) {
+    tmp_buf[strlen(tmp_buf)-1] = 0;
+  }
+  va_end( args );
+
+  if ( config->mode != MODE_INTERACTIVE ) {
+    /* display info via syslog */
+    syslog( level, "%s", tmp_buf );
+  } else {
+    if ( level <= LOG_ERR ) {
+      /* display info via stderr */
+      for ( i = 0; prioritynames[i].c_name != NULL; i++ ) {
+	if ( prioritynames[i].c_val == level ) {
+	  fprintf( stderr, "%s[%u] - %s\n", prioritynames[i].c_name, config->cur_pid, tmp_buf );
+	  return TRUE;
+	}
+      }
+    } else {
+      /* display info via stdout */
+      for ( i = 0; prioritynames[i].c_name != NULL; i++ ) {
+	if ( prioritynames[i].c_val == level ) {
+	  printf( "%s[%u] - %s\n", prioritynames[i].c_name, config->cur_pid, tmp_buf );
+	  return TRUE;
+	}
+      }
+    }
+  }
+
+  return FAILED;
+}
+
+/****
+ *
  * safely open a file for writing
  *
  ****/
