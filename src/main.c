@@ -2,7 +2,7 @@
  *
  * Description: Main functions
  * 
- * Copyright (c) 2008-2017, Ron Dilley
+ * Copyright (c) 2008-2019, Ron Dilley
  * All rights reserved.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -23,11 +23,8 @@
 /****
  *
  * includes
- *.
+ *
  ****/
-
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "main.h"
 
@@ -154,15 +151,10 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  /* enable syslog */
-  openlog( PROGNAME, LOG_CONS & LOG_PID, LOG_LOCAL0 );
-
   /* check dirs and files for danger */
 
   if ( time( &config->current_time ) EQ -1 ) {
     display( LOG_ERR, "Unable to get current time" );
-    /* cleanup syslog */
-    closelog();
     /* cleanup buffers */
     cleanup();
     return EXIT_FAILURE;
@@ -185,8 +177,6 @@ int main(int argc, char *argv[]) {
 
   show_info();
 
-  //lineHash = initHash( 53 );
-
   if (optind < argc) {
     processFile( argv[optind++] );
   }
@@ -196,9 +186,6 @@ int main(int argc, char *argv[]) {
    * we are done
    *
    ****/
-
-  /* cleanup syslog */
-  closelog();
 
   cleanup();
 
