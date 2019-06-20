@@ -260,3 +260,12 @@ PRIVATE void cleanup( void ) {
   XFREE( config );
 }
 
+/****
+ * 
+ * process files
+ * 
+ */
+
+int processFile( const char *fName ) {
+  return TRUE;
+}
