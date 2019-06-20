@@ -1,6 +1,6 @@
 /*****
  *
- * Copyright (c) 2013-2014, Ron Dilley
+ * Copyright (c) 2013-2019, Ron Dilley
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -75,10 +75,40 @@
  *
  ****/
 
+struct bloom_hash {
+    hash_function func;
+    struct bloom_hash *next;
+};
+
+struct bloom_filter {
+    struct bloom_hash *func;
+    void *bits;
+    size_t size;
+};
+
 /****
  *
  * function prototypes
  *
  ****/
+
+
+typedef unsigned int (*hash_function)(const void *data);
+typedef struct bloom_filter * bloom_t;
+
+/* Creates a new bloom filter with no hash functions and size * 8 bits. */
+bloom_t bloom_create(size_t size);
+/* Frees a bloom filter. */
+void bloom_free(bloom_t filter);
+/* Adds a hashing function to the bloom filter. You should add all of the
+ * functions you intend to use before you add any items. */
+void bloom_add_hash(bloom_t filter, hash_function func);
+/* Adds an item to the bloom filter. */
+void bloom_add(bloom_t filter, const void *item);
+/* Tests if an item is in the bloom filter.
+ *
+ * Returns false if the item has definitely not been added before. Returns true
+ * if the item was probably added before. */
+bool bloom_test(bloom_t filter, const void *item);
 
 #endif /* BLOOM_FILTER_DOT_H */
