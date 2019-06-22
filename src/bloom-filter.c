@@ -37,9 +37,6 @@
  *.
  ****/
 
-#include <stdio.h>
-#include <stdlib.h>
-
 #include "bloom-filter.h"
 
 /****
@@ -72,14 +69,14 @@ extern Config_t *config;
  *
  ****/
 
-bloom_t bloom_create(size_t size) {
-	bloom_t res = calloc(1, sizeof(struct bloom_filter));
+bloom_t *bloom_create(size_t size) {
+	bloom_t res = calloc(1, sizeof(bloom_t));
 	res->size = size;
 	res->bits = malloc(size);
 	return res;
 }
 
-void bloom_free(bloom_t filter) {
+void bloom_free(bloom_t *filter) {
 	if (filter) {
 		while (filter->func) {
 			struct bloom_hash *h;
@@ -91,7 +88,7 @@ void bloom_free(bloom_t filter) {
 	}
 }
 
-void bloom_add_hash(bloom_t filter, hash_function func) {
+void bloom_add_hash(bloom_t *filter, hash_function func) {
 	struct bloom_hash *h = calloc(1, sizeof(struct bloom_hash));
 	h->func = func;
 	struct bloom_hash *last = filter->func;
@@ -105,7 +102,7 @@ void bloom_add_hash(bloom_t filter, hash_function func) {
 	}
 }
 
-void bloom_add(bloom_t filter, const void *item) {
+void bloom_add(bloom_t *filter, const void *item) {
 	struct bloom_hash *h = filter->func;
 	uint8_t *bits = filter->bits;
 	while (h) {
@@ -116,7 +113,7 @@ void bloom_add(bloom_t filter, const void *item) {
 	}
 }
 
-bool bloom_test(bloom_t filter, const void *item) {
+bool bloom_test(bloom_t *filter, const void *item) {
 	struct bloom_hash *h = filter->func;
 	uint8_t *bits = filter->bits;
 	while (h) {
