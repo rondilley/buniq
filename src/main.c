@@ -52,6 +52,9 @@ PUBLIC char compDir[PATH_MAX];
 /* hashes */
 struct hash_s *lineHash = NULL;
 
+/* bloom filter */
+struct bloom bf;
+
 /****
  *
  * external variables
@@ -177,6 +180,8 @@ int main(int argc, char *argv[]) {
 
   show_info();
 
+  bloom_init( &bf, 1000, 0.01);
+
   if (optind < argc) {
     processFile( argv[optind++] );
   }
@@ -187,6 +192,8 @@ int main(int argc, char *argv[]) {
    *
    ****/
 
+  bloom_free( &bf );
+  
   cleanup();
 
   return( EXIT_SUCCESS );

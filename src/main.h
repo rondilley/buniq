@@ -77,6 +77,7 @@
 #include "getopt.h"
 #include "hash.h"
 #include "md5.h"
+#include "bloom-filter.h"
 
 /****
  *
