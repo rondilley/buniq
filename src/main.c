@@ -52,9 +52,6 @@ PUBLIC char compDir[PATH_MAX];
 /* hashes */
 struct hash_s *lineHash = NULL;
 
-/* bloom filter */
-struct bloom bf;
-
 /****
  *
  * external variables
@@ -180,8 +177,6 @@ int main(int argc, char *argv[]) {
 
   show_info();
 
-  bloom_init( &bf, 1000, 0.01);
-
   if (optind < argc) {
     processFile( argv[optind++] );
   }
@@ -192,8 +187,6 @@ int main(int argc, char *argv[]) {
    *
    ****/
 
-  bloom_free( &bf );
-  
   cleanup();
 
   return( EXIT_SUCCESS );
@@ -274,5 +267,56 @@ PRIVATE void cleanup( void ) {
  */
 
 int processFile( const char *fName ) {
+  struct stat fStatBuf;
+  size_t fSize;
+  struct bloom bf;
+  FILE *inFile;
+  char rBuf[8192];
+
+  /* get status on file */
+  if ( stat( fName, &fStatBuf ) EQ FAILED ) {
+    return FAILED;
+  }
+
+  /* get size */
+  fSize = fStatBuf.st_size;
+
+  /* read first n lines of file */
+
+  /* guess at average line size and overall number of lines in file */
+  /* doing this until I add growable bloom filter option */
+
+  /* init bloom filter */
+  if ( bloom_init( &bf, fSize / 10, 0.005) EQ TRUE ) {
+    fprintf( stderr, "ERR - Unable to initialize bloom filter\n" );
+    return FAILED;
+  }
+
+  /* process all lines in file */
+
+  if ( strcmp( fName, "-" ) EQ 0 ) {
+    inFile = stdin;
+  } else {
+#ifdef HAVE_FOPEN64
+    if ( ( inFile = fopen64( fName, "r" ) ) EQ NULL ) {
+#else
+    if ( ( inFile = fopen( fName, "r" ) ) EQ NULL ) {
+#endif
+      fprintf( stderr, "ERR - Unable to open file [%s] %d (%s)\n", fName, errno, strerror( errno ) );
+      bloom_free( &bf );
+      return( EXIT_FAILURE );
+    }
+  }
+
+  while ( fgets( rBuf, sizeof( rBuf ), inFile ) != NULL ) {
+    if ( bloom_add( &bf, rBuf, strlen( rBuf ) ) EQ FALSE ) {
+      printf( "%s", rBuf );
+    }
+  }
+  /* close file */
+
+  fclose( inFile );
+  bloom_free( &bf );
+  
   return TRUE;
 }
