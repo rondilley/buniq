@@ -88,10 +88,10 @@ struct bloom
   // These fields are part of the public interface of this structure.
   // Client code may read these values if desired. Client code MUST NOT
   // modify any of these.
-  int entries;
+  size_t entries;
   double error;
-  int bits;
-  int bytes;
+  size_t bits;
+  size_t bytes;
   int hashes;
 
   // Fields below are private to the implementation. These may go away or
@@ -108,13 +108,12 @@ struct bloom
  *
  ****/
 
-int bloom_init(struct bloom * bloom, int entries, double error);
-int bloom_init_size(struct bloom * bloom, int entries, double error, unsigned int cache_size);
+int bloom_init(struct bloom * bloom, size_t entries, double error);
 int bloom_check(struct bloom * bloom, const void * buffer, int len);
+int bloom_check_add(struct bloom * bloom, const void * buffer, int len, int add);
 int bloom_add(struct bloom * bloom, const void * buffer, int len);
 void bloom_print(struct bloom * bloom);
 void bloom_free(struct bloom * bloom);
 int bloom_reset(struct bloom * bloom);
-const char * bloom_version();
 
 #endif /* BLOOM_FILTER_DOT_H */

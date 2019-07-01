@@ -158,6 +158,7 @@ AC_CHECK_HEADER_STDBOOL
 dnl ############## Function checks
 
 AC_CHECK_FUNCS([getopt_long])
+AC_CHECK_FUNCS([getopt])
 AC_CHECK_FUNCS([bzero])
 AC_CHECK_FUNCS([endpwent])
 AC_CHECK_FUNCS([fchdir])

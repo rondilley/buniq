@@ -2,7 +2,7 @@
  *
  * Description: Memory Helper Function Headers
  * 
- * Copyright (c) 2009-2015, Ron Dilley
+ * Copyright (c) 2009-2019, Ron Dilley
  * All rights reserved.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -82,10 +82,10 @@ struct Mem_s {
  ****/
 
 char *copy_argv(char *argv[]);
-void *xmalloc_( int size, const char *filename, const int linenumber );
-void *xrealloc_( void *ptr, int size, const char *filename, const int linenumber);
-void *xmemset_( void *ptr, const char value, const int size, const char *filename, const int linenumber );
-void *xmemcpy_( void *d_ptr, void *s_ptr, const int size, const char *filename, const int linenumber );
+void *xmalloc_( size_t size, const char *filename, const int linenumber );
+void *xrealloc_( void *ptr, size_t size, const char *filename, const int linenumber);
+void *xmemset_( void *ptr, const char value, const size_t size, const char *filename, const int linenumber );
+void *xmemcpy_( void *d_ptr, void *s_ptr, const size_t size, const char *filename, const int linenumber );
 void xfree_( void *ptr, const char *filename, const int linenumber );
 void xfree_all_( const char *filename, const int linenumber );
 char *xstrdup_( const char *str, const char *filename, const int linenumber );

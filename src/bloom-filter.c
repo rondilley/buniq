@@ -69,13 +69,10 @@ extern Config_t *config;
  *
  ****/
 
-#define MAKESTRING(n) STRING(n)
-#define STRING(n) #n
-
 inline static int test_bit_set_bit(unsigned char * buf,
-                                   unsigned int x, int set_bit)
+                                   size_t x, int set_bit)
 {
-  unsigned int byte = x >> 3;
+  size_t byte = x >> 3;
   unsigned char c = buf[byte];        // expensive memory access
   unsigned int mask = 1 << (x % 8);
 
@@ -89,21 +86,21 @@ inline static int test_bit_set_bit(unsigned char * buf,
   }
 }
 
-static int bloom_check_add(struct bloom * bloom,
+inline int bloom_check_add(struct bloom * bloom,
                            const void * buffer, int len, int add)
 {
-  uint32_t hash[4];
-  if (bloom->ready == 0) {
-    printf("bloom at %p not initialized!\n", (void *)bloom);
+  uint64_t hash[2];
+  if (bloom->ready EQ 0) {
+    fprintf(stderr, "bloom at %p not initialized!\n", (void *)bloom);
     return -1;
   }
 
   int hits = 0;
   MurmurHash3_x64_128(buffer, len, 0x9747b28c, &hash );
-  register unsigned int a = (uint64_t)hash[0];
-  register unsigned int b = (uint64_t)hash[1];
-  register unsigned int x;
-  register unsigned int i;
+  register uint64_t a = hash[0];
+  register uint64_t b = hash[1];
+  register uint64_t x;
+  register uint64_t i;
 
   for (i = 0; i < bloom->hashes; i++) {
     x = (a + i*b) % bloom->bits;
@@ -115,21 +112,11 @@ static int bloom_check_add(struct bloom * bloom,
     }
   }
 
-  if (hits == bloom->hashes) {
+  if (hits EQ bloom->hashes) {
     return 1;                // 1 == element already in (or collision)
   }
 
   return 0;
-}
-
-/** ***************************************************************************
- * Deprecated, use bloom_init()
- *
- */
-int bloom_init_size(struct bloom * bloom, int entries, double error,
-                    unsigned int cache_size)
-{
-  return bloom_init(bloom, entries, error);
 }
 
 /** ***************************************************************************
@@ -159,11 +146,11 @@ int bloom_init_size(struct bloom * bloom, int entries, double error,
  *     1 - on failure
  *
  */
-int bloom_init(struct bloom * bloom, int entries, double error)
+int bloom_init(struct bloom * bloom, size_t entries, double error)
 {
   bloom->ready = 0;
 
-  if (entries < 1000 || error == 0) {
+  if (entries < 1000 || error EQ 0) {
     return 1;
   }
 
@@ -175,7 +162,7 @@ int bloom_init(struct bloom * bloom, int entries, double error)
   bloom->bpe = -(num / denom);
 
   double dentries = (double)entries;
-  bloom->bits = (int)(dentries * bloom->bpe);
+  bloom->bits = (size_t)(dentries * bloom->bpe);
 
   if (bloom->bits % 8) {
     bloom->bytes = (bloom->bits / 8) + 1;
@@ -211,7 +198,7 @@ int bloom_init(struct bloom * bloom, int entries, double error)
  *    -1 - bloom not initialized
  *
  */
-int bloom_check(struct bloom * bloom, const void * buffer, int len)
+inline int bloom_check(struct bloom * bloom, const void * buffer, int len)
 {
   return bloom_check_add(bloom, buffer, len, 0);
 }
@@ -234,7 +221,7 @@ int bloom_check(struct bloom * bloom, const void * buffer, int len)
  *    -1 - bloom not initialized
  *
  */
-int bloom_add(struct bloom * bloom, const void * buffer, int len)
+inline int bloom_add(struct bloom * bloom, const void * buffer, int len)
 {
   return bloom_check_add(bloom, buffer, len, 1);
 }
@@ -245,13 +232,13 @@ int bloom_add(struct bloom * bloom, const void * buffer, int len)
  */
 void bloom_print(struct bloom * bloom)
 {
-  printf("bloom at %p\n", (void *)bloom);
-  printf(" ->entries = %d\n", bloom->entries);
-  printf(" ->error = %f\n", bloom->error);
-  printf(" ->bits = %d\n", bloom->bits);
-  printf(" ->bits per elem = %f\n", bloom->bpe);
-  printf(" ->bytes = %d\n", bloom->bytes);
-  printf(" ->hash functions = %d\n", bloom->hashes);
+  fprintf(stderr, "bloom at %p\n", (void *)bloom);
+  fprintf(stderr, " ->entries = %ld\n", bloom->entries);
+  fprintf(stderr, " ->error = %lf\n", bloom->error);
+  fprintf(stderr, " ->bits = %ld\n", bloom->bits);
+  fprintf(stderr, " ->bits per elem = %f\n", bloom->bpe);
+  fprintf(stderr, " ->bytes = %ld\n", bloom->bytes);
+  fprintf(stderr, " ->hash functions = %d\n", bloom->hashes);
 }
 
 /** ***************************************************************************
@@ -295,15 +282,4 @@ int bloom_reset(struct bloom * bloom)
   if (!bloom->ready) return 1;
   memset(bloom->bf, 0, bloom->bytes);
   return 0;
-}
-
-/** ***************************************************************************
- * Returns version string compiled into library.
- *
- * Return: version string
- *
- */
-const char * bloom_version()
-{
-  return MAKESTRING(BLOOM_VERSION);
 }

@@ -2,7 +2,7 @@
  *
  * Description: Memory Helper Functions
  * 
- * Copyright (c) 2009-2015, Ron Dilley
+ * Copyright (c) 2009-2019, Ron Dilley
  * All rights reserved.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -55,8 +55,8 @@ extern int quit;
  ****/
 
 #ifdef MEM_DEBUG
-PRIVATE struct Mem_s *head;
-PRIVATE struct Mem_s *tail;
+ PRIVATE struct Mem_s *head;
+ PRIVATE struct Mem_s *tail;
 #endif
 
 /****
@@ -108,7 +108,7 @@ PUBLIC char *copy_argv(char *argv[]) {
  *
  ****/
 
-void *xmalloc_( const int size, const char *filename, const int linenumber) {
+void *xmalloc_( const size_t size, const char *filename, const int linenumber) {
   void *result;
 #ifdef MEM_DEBUG
   PRIVATE struct Mem_s *d_result;
@@ -117,7 +117,7 @@ void *xmalloc_( const int size, const char *filename, const int linenumber) {
   /* allocate buf */
   result = malloc( size );
   if ( result EQ NULL ) {
-    fprintf( stderr, "out of memory (%d at %s:%d)!\n", size, filename, linenumber );
+    fprintf( stderr, "out of memory (%ld at %s:%d)!\n", size, filename, linenumber );
 #ifdef MEM_DEBUG
     XFREE_ALL();
 #endif
@@ -169,12 +169,12 @@ void *xmalloc_( const int size, const char *filename, const int linenumber) {
  *
  ****/
 
-void *xmemcpy_( void *d_ptr, void *s_ptr, const int size, const char *filename, const int linenumber ) {
+void *xmemcpy_( void *d_ptr, void *s_ptr, const size_t size, const char *filename, const int linenumber ) {
   void *result;
 #ifdef MEM_DEBUG
   PRIVATE struct Mem_s *mem_ptr;
-  PRIVATE int source_size;
-  PRIVATE int dest_size;
+  PRIVATE size_t source_size;
+  PRIVATE size_t dest_size;
 #endif
 
   if ( s_ptr EQ NULL ) {
@@ -278,8 +278,8 @@ char *xmemncpy_( char *d_ptr, const char *s_ptr, const size_t len, const int siz
   char *result;
 #ifdef MEM_DEBUG
   PRIVATE struct Mem_s *mem_ptr;
-  PRIVATE int source_size;
-  PRIVATE int dest_size;
+  PRIVATE size_t source_size;
+  PRIVATE size_t dest_size;
 #endif
 
   if ( s_ptr EQ NULL ) {
@@ -379,7 +379,7 @@ char *xmemncpy_( char *d_ptr, const char *s_ptr, const size_t len, const int siz
  *
  ****/
 
-void *xmemset_( void *ptr, const char value, const int size, const char *filename, const int linenumber ) {
+void *xmemset_( void *ptr, const char value, const size_t size, const char *filename, const int linenumber ) {
   void *result;
 
   if ( ptr EQ NULL ) {
@@ -408,9 +408,10 @@ void *xmemset_( void *ptr, const char value, const int size, const char *filenam
  *
  ****/
 
-void *xrealloc_( void *ptr, int size, const char *filename, const int linenumber) {
+void *xrealloc_( void *ptr, size_t size, const char *filename, const int linenumber) {
   void *result;
-  int current_size, found = FALSE;
+  size_t current_size;
+  int found = FALSE;
   struct Mem_s *mem_ptr;
   
   if ( ptr EQ NULL ) {
@@ -420,7 +421,7 @@ void *xrealloc_( void *ptr, int size, const char *filename, const int linenumber
   }
 
   if ( size <= 0 ) {
-    fprintf( stderr, "realloc() called with invalid size [%d] at %s:%d\n", size, filename, linenumber );
+    fprintf( stderr, "realloc() called with invalid size [%ld] at %s:%d\n", size, filename, linenumber );
     quit = TRUE;
     exit( 1 );
   }
@@ -465,7 +466,7 @@ void *xrealloc_( void *ptr, int size, const char *filename, const int linenumber
       mem_ptr->buf_size = size;
 #endif
   } else {
-    fprintf( stderr, "out of memory (%d at %s:%d)!\n", size, filename, linenumber );
+    fprintf( stderr, "out of memory (%ld at %s:%d)!\n", size, filename, linenumber );
     quit = TRUE;
     exit( 1 );   
   }
@@ -757,8 +758,8 @@ char *xstrncpy_( char *d_ptr, const char *s_ptr, const size_t len, const char *f
   PRIVATE int size;
 #ifdef MEM_DEBUG
   PRIVATE struct Mem_s *mem_ptr;
-  PRIVATE int source_size;
-  PRIVATE int dest_size;
+  PRIVATE size_t source_size;
+  PRIVATE size_t dest_size;
 #endif
 
   /* check for null source pointer */

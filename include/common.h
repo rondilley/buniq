@@ -83,6 +83,7 @@ typedef struct {
   char *hostname;
   char *domainname;
   int debug;
+  double eRate;
   int hash;
   int quick;
   int mode;

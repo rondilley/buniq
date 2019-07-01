@@ -117,12 +117,13 @@ int main(int argc, char *argv[]) {
     static struct option long_options[] = {
       {"version", no_argument, 0, 'v' },
       {"debug", required_argument, 0, 'd' },
+      {"error", required_argument, 0, 'e' },
       {"help", no_argument, 0, 'h' },
       {0, no_argument, 0, 0}
     };
-    c = getopt_long(argc, argv, "vd:h", long_options, &option_index);
+    c = getopt_long(argc, argv, "vd:e:h", long_options, &option_index);
 #else
-    c = getopt( argc, argv, "vd:h" );
+    c = getopt( argc, argv, "vd:e:h" );
 #endif
 
     if (c EQ -1)
@@ -141,6 +142,11 @@ int main(int argc, char *argv[]) {
       config->mode = MODE_INTERACTIVE;
       break;
 
+    case 'e':
+      /* override default bf error rate */
+      config->eRate = atof( optarg );
+      break;
+
     case 'h':
       /* show help info */
       print_help();
@@ -150,6 +156,10 @@ int main(int argc, char *argv[]) {
       fprintf( stderr, "Unknown option code [0%o]\n", c);
     }
   }
+
+  /* set default error rate if not set */
+  if ( config->eRate EQ 0 )
+    config->eRate = 0.01;
 
   /* check dirs and files for danger */
 
@@ -232,11 +242,13 @@ PRIVATE void print_help( void ) {
   fprintf( stderr, "syntax: %s [options]\n", PACKAGE );
 
 #ifdef HAVE_GETOPT_LONG
-  fprintf( stderr, " -d|--debug (0-9)     enable debugging info\n" );
-  fprintf( stderr, " -h|--help            this info\n" );
-  fprintf( stderr, " -v|--version         display version information\n" );
+  fprintf( stderr, " -d|--debug (0-9)   enable debugging info\n" );
+  fprintf( stderr, " -e|--error (rate)  error rate [default: .01]\n" );
+  fprintf( stderr, " -h|--help          this info\n" );
+  fprintf( stderr, " -v|--version       display version information\n" );
 #else
-  fprintf( stderr, " -d {lvl}   enable debugging info\n" );
+  fprintf( stderr, " -d (0-9)   enable debugging info\n" );
+  fprintf( stderr, " -e (rate)  error rate [default: .01]\n" );
   fprintf( stderr, " -h         this info\n" );
   fprintf( stderr, " -v         display version information\n" );
 #endif
@@ -266,6 +278,7 @@ PRIVATE void cleanup( void ) {
  * 
  */
 
+/* XXX would be faster to run a read pthread and a bloom pthread */
 int processFile( const char *fName ) {
   struct stat fStatBuf;
   size_t fSize;
@@ -287,13 +300,15 @@ int processFile( const char *fName ) {
   /* doing this until I add growable bloom filter option */
 
   /* init bloom filter */
-  if ( bloom_init( &bf, fSize / 10, 0.005) EQ TRUE ) {
+  if ( bloom_init( &bf, fSize / 10, config->eRate ) EQ TRUE ) {
     fprintf( stderr, "ERR - Unable to initialize bloom filter\n" );
     return FAILED;
   }
+  bloom_print( &bf );
 
   /* process all lines in file */
 
+  /* XXX need growable bloom filter to use stdin */
   if ( strcmp( fName, "-" ) EQ 0 ) {
     inFile = stdin;
   } else {
@@ -308,8 +323,9 @@ int processFile( const char *fName ) {
     }
   }
 
+  /* XXX need to switch to block reads */
   while ( fgets( rBuf, sizeof( rBuf ), inFile ) != NULL ) {
-    if ( bloom_add( &bf, rBuf, strlen( rBuf ) ) EQ FALSE ) {
+    if ( !bloom_check_add( &bf, rBuf, strlen( rBuf ) , TRUE ) ) {
       printf( "%s", rBuf );
     }
   }
