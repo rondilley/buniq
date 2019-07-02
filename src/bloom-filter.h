@@ -98,7 +98,8 @@ struct bloom
   // change incompatibly at any moment. Client code MUST NOT access or rely
   // on these.
   double bpe;
-  unsigned char * bf;
+  unsigned char *bf;
+  uint64_t *bf64;
   int ready;
 };
 

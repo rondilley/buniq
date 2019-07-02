@@ -69,8 +69,14 @@ extern Config_t *config;
  *
  ****/
 
-inline static int test_bit_set_bit(unsigned char * buf,
-                                   size_t x, int set_bit)
+//bool f;         // conditional flag
+//unsigned int m; // the bit mask
+//unsigned int w; // the word to modify:  if (f) w |= m; else w &= ~m; 
+//w ^= (-f ^ w) & m;
+// OR, for superscalar CPUs:
+//w = (w & ~m) | (-f & m);
+
+inline static int test_bit_set_bit(unsigned char * buf, size_t x, int set_bit)
 {
   size_t byte = x >> 3;
   unsigned char c = buf[byte];        // expensive memory access
@@ -86,7 +92,20 @@ inline static int test_bit_set_bit(unsigned char * buf,
   }
 }
 
-inline int bloom_check_add(struct bloom * bloom,
+inline static int test_bit_set_bit_64( uint64_t *buf, size_t x )
+{
+  size_t qword = x >> 6;
+  uint64_t c = buf[qword];        // expensive memory access
+  uint64_t mask = 1 << (x % 64);
+
+  if (c & mask)
+    return 1;
+
+  buf[qword] = c | mask;
+  return 0;
+}
+
+inline static int bloom_check_add(struct bloom * bloom,
                            const void * buffer, int len, int add)
 {
   uint64_t hash[2];
@@ -109,6 +128,32 @@ inline int bloom_check_add(struct bloom * bloom,
     } else if (!add) {
       // Don't care about the presence of all the bits. Just our own.
       return 0;
+    }
+  }
+
+  if (hits EQ bloom->hashes) {
+    return 1;                // 1 == element already in (or collision)
+  }
+
+  return 0;
+}
+
+inline static int bloom_check_add_64(struct bloom * bloom,
+                           const void * buffer, int len )
+{
+  uint64_t hash[2];
+
+  int hits = 0;
+  MurmurHash3_x64_128(buffer, len, 0x9747b28c, &hash );
+  register uint64_t a = hash[0];
+  register uint64_t b = hash[1];
+  register uint64_t x;
+  register uint64_t i;
+
+  for (i = 0; i < bloom->hashes; i++) {
+    x = (a + i*b) % bloom->bits;
+    if (test_bit_set_bit_64(bloom->bf64, x)) {
+      hits++;
     }
   }
 
@@ -146,6 +191,7 @@ inline int bloom_check_add(struct bloom * bloom,
  *     1 - on failure
  *
  */
+
 int bloom_init(struct bloom * bloom, size_t entries, double error)
 {
   bloom->ready = 0;
@@ -181,6 +227,39 @@ int bloom_init(struct bloom * bloom, size_t entries, double error)
   return 0;
 }
 
+int bloom_init_64(struct bloom * bloom, size_t entries, double error)
+{
+  bloom->ready = 0;
+
+  if (entries < 1000 || error EQ 0) {
+    return 1;
+  }
+
+  bloom->entries = entries;
+  bloom->error = error;
+
+  double num = log(bloom->error);
+  double denom = 0.480453013918201; // ln(2)^2
+  bloom->bpe = -(num / denom);
+
+  double dentries = (double)entries;
+  bloom->bits = (size_t)(dentries * bloom->bpe);
+
+  if (bloom->bits % 64) {
+    bloom->qwords = (bloom->bits / 64) + 1;
+  } else {
+    bloom->qwords = bloom->bits / 64;
+  }
+
+  bloom->hashes = (int)ceil(0.693147180559945 * bloom->bpe);  // ln(2)
+
+  if ( ( bloom->bf64 = (uint64_t *)XMALLOC( bloom->qwords * sizeof(uint64_t) ) ) EQ NULL )
+    return 1;
+
+  bloom->ready = 1;
+  return 0;
+}
+
 /** ***************************************************************************
  * Check if the given element is in the bloom filter. Remember this may
  * return false positive if a collision occurred.
@@ -198,7 +277,7 @@ int bloom_init(struct bloom * bloom, size_t entries, double error)
  *    -1 - bloom not initialized
  *
  */
-inline int bloom_check(struct bloom * bloom, const void * buffer, int len)
+inline static int bloom_check(struct bloom * bloom, const void * buffer, int len)
 {
   return bloom_check_add(bloom, buffer, len, 0);
 }
@@ -221,7 +300,7 @@ inline int bloom_check(struct bloom * bloom, const void * buffer, int len)
  *    -1 - bloom not initialized
  *
  */
-inline int bloom_add(struct bloom * bloom, const void * buffer, int len)
+inline static int bloom_add(struct bloom * bloom, const void * buffer, int len)
 {
   return bloom_check_add(bloom, buffer, len, 1);
 }
@@ -256,9 +335,11 @@ void bloom_print(struct bloom * bloom)
  */
 void bloom_free(struct bloom * bloom)
 {
-  if (bloom->ready) {
-    free(bloom->bf);
-  }
+  if ( bloom->bf != NULL )
+    XFREE(bloom->bf);
+  else if ( bloom->bf64 != NULL )
+    XFREE( bloom->bf64 );
+
   bloom->ready = 0;
 }
 
@@ -280,6 +361,9 @@ void bloom_free(struct bloom * bloom)
 int bloom_reset(struct bloom * bloom)
 {
   if (!bloom->ready) return 1;
-  memset(bloom->bf, 0, bloom->bytes);
+  if ( bloom->bf != NULL )
+    memset(bloom->bf, 0, bloom->bytes);
+  else if ( bloom->bf64 != NULL )
+    memset( bloom->bf64, 0, bloom->qwords * sizeof( uint64_t ));
   return 0;
 }
