@@ -138,8 +138,7 @@ inline static int bloom_check_add(struct bloom * bloom,
   return 0;
 }
 
-inline static int bloom_check_add_64(struct bloom * bloom,
-                           const void * buffer, int len )
+inline int bloom_check_add_64(struct bloom * bloom, const void * buffer, int len )
 {
   uint64_t hash[2];
 
@@ -219,9 +218,9 @@ int bloom_init(struct bloom * bloom, size_t entries, double error)
   bloom->hashes = (int)ceil(0.693147180559945 * bloom->bpe);  // ln(2)
 
   bloom->bf = (unsigned char *)XMALLOC( bloom->bytes );
-  if (bloom->bf EQ NULL) {                                   // LCOV_EXCL_START
+  if (bloom->bf EQ NULL) {
     return 1;
-  }                                                          // LCOV_EXCL_STOP
+  }
 
   bloom->ready = 1;
   return 0;

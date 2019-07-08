@@ -92,6 +92,7 @@ struct bloom
   double error;
   size_t bits;
   size_t bytes;
+  size_t qwords;
   int hashes;
 
   // Fields below are private to the implementation. These may go away or
@@ -110,9 +111,11 @@ struct bloom
  ****/
 
 int bloom_init(struct bloom * bloom, size_t entries, double error);
-int bloom_check(struct bloom * bloom, const void * buffer, int len);
-int bloom_check_add(struct bloom * bloom, const void * buffer, int len, int add);
-int bloom_add(struct bloom * bloom, const void * buffer, int len);
+int bloom_init_64(struct bloom * bloom, size_t entries, double error);
+static int bloom_check(struct bloom * bloom, const void * buffer, int len);
+static int bloom_check_add(struct bloom * bloom, const void * buffer, int len, int add);
+int bloom_check_add_64(struct bloom * bloom, const void * buffer, int len );
+static int bloom_add(struct bloom * bloom, const void * buffer, int len);
 void bloom_print(struct bloom * bloom);
 void bloom_free(struct bloom * bloom);
 int bloom_reset(struct bloom * bloom);

@@ -300,7 +300,7 @@ int processFile( const char *fName ) {
   /* doing this until I add growable bloom filter option */
 
   /* init bloom filter */
-  if ( bloom_init( &bf, fSize / 10, config->eRate ) EQ TRUE ) {
+  if ( bloom_init_64( &bf, fSize / 10, config->eRate ) EQ TRUE ) {
     fprintf( stderr, "ERR - Unable to initialize bloom filter\n" );
     return FAILED;
   }
@@ -325,7 +325,7 @@ int processFile( const char *fName ) {
 
   /* XXX need to switch to block reads */
   while ( fgets( rBuf, sizeof( rBuf ), inFile ) != NULL ) {
-    if ( !bloom_check_add( &bf, rBuf, strlen( rBuf ) , TRUE ) ) {
+    if ( !bloom_check_add_64( &bf, rBuf, strlen( rBuf )) ) {
       printf( "%s", rBuf );
     }
   }
