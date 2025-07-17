@@ -74,6 +74,7 @@ int free_scaling_bloom(scaling_bloom_t *bloom);
 int scaling_bloom_add(scaling_bloom_t *bloom, const char *s, size_t len, uint64_t id);
 int scaling_bloom_remove(scaling_bloom_t *bloom, const char *s, size_t len, uint64_t id);
 int scaling_bloom_check(scaling_bloom_t *bloom, const char *s, size_t len);
+int scaling_bloom_check_add(scaling_bloom_t *bloom, const char *s, size_t len, uint64_t id);
 int scaling_bloom_flush(scaling_bloom_t *bloom);
 uint64_t scaling_bloom_mem_seqnum(scaling_bloom_t *bloom);
 uint64_t scaling_bloom_disk_seqnum(scaling_bloom_t *bloom);

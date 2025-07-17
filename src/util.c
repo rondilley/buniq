@@ -2,7 +2,7 @@
  *
  * Description: Utility Functions
  * 
- * Copyright (c) 2009-2015, Ron Dilley
+ * Copyright (c) 2009-2025, Ron Dilley
  * All rights reserved.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -70,7 +70,18 @@ extern char **environ;
 
 /****
  *
- * check to see if dir is safe
+ * Validates directory security by checking ownership and permissions
+ *
+ * Traverses the directory path from specified directory to root, checking
+ * each component for safe ownership and permissions to prevent privilege
+ * escalation attacks. Ensures directories are owned by root or the current
+ * user and are not writable by group or other users.
+ *
+ * Arguments:
+ *   dir - Path to the directory to validate
+ *
+ * Returns:
+ *   1 if directory path is secure, 0 if insecure, FAILED (-1) on error
  *
  ****/
 int is_dir_safe( const char *dir ) {
@@ -150,7 +161,20 @@ int is_dir_safe( const char *dir ) {
 
 /****
  *
- * display output
+ * Displays formatted output to appropriate destination based on mode
+ *
+ * Routes output to syslog in daemon mode or to stdout/stderr in interactive
+ * mode. Error messages (LOG_ERR and below) go to stderr, while informational
+ * messages go to stdout. Automatically strips trailing newlines and adds
+ * priority level prefixes in interactive mode.
+ *
+ * Arguments:
+ *   level - Syslog priority level (LOG_ERR, LOG_INFO, etc.)
+ *   format - Printf-style format string
+ *   ... - Variable arguments for format string
+ *
+ * Returns:
+ *   TRUE on success, FAILED on error
  *
  ****/
 
@@ -194,7 +218,18 @@ int display( int level, char *format, ... ) {
 
 /****
  *
- * safely open a file for writing
+ * Safely opens a file for writing with security checks
+ *
+ * Performs secure file opening by first checking if the file exists and
+ * validating it's a regular file, then unlinking it and creating a new
+ * file with exclusive creation flags to prevent race conditions and
+ * symlink attacks. Sets appropriate permissions for the new file.
+ *
+ * Arguments:
+ *   filename - Path to the file to open safely
+ *
+ * Returns:
+ *   File descriptor on success, FAILED (-1) on error
  *
  ****/
 
@@ -223,7 +258,17 @@ static int safe_open( const char *filename ) {
 
 /****
  *
- * cleaup pid file
+ * Removes PID file from filesystem
+ *
+ * Safely removes the specified PID file if the filename is non-empty.
+ * This function is typically called during program shutdown to clean
+ * up the PID file created during daemon startup.
+ *
+ * Arguments:
+ *   filename - Path to the PID file to remove
+ *
+ * Returns:
+ *   None (void)
  *
  ****/
 
@@ -235,7 +280,18 @@ static void cleanup_pid_file( const char *filename ) {
 
 /****
  *
- * sanitize environment
+ * Sanitizes the environment variables for security
+ *
+ * Creates a new restricted environment by preserving only essential
+ * environment variables and setting secure defaults. Removes potentially
+ * dangerous variables while preserving necessary ones like TZ (timezone).
+ * Sets IFS and PATH to safe values to prevent shell injection attacks.
+ *
+ * Arguments:
+ *   None
+ *
+ * Returns:
+ *   None (void)
  *
  ****/
 
@@ -285,7 +341,16 @@ void sanitize_environment( void ) {
 
 /****
  *
- * is it an odd number
+ * Determines if a number is odd
+ *
+ * Uses modulo operation to check if the given integer is odd.
+ * This is an inline function for performance optimization.
+ *
+ * Arguments:
+ *   n - Integer to test for oddness
+ *
+ * Returns:
+ *   Non-zero if number is odd, 0 if even
  *
  ****/
 
@@ -295,7 +360,17 @@ inline int isodd(const int n) {
 
 /****
  *
- * is it an even number
+ * Determines if a number is even
+ *
+ * Uses the isodd function to determine if the given integer is even
+ * by returning the logical NOT of the odd test result.
+ * This is an inline function for performance optimization.
+ *
+ * Arguments:
+ *   n - Integer to test for evenness
+ *
+ * Returns:
+ *   Non-zero if number is even, 0 if odd
  *
  ****/
 

@@ -12,6 +12,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <errno.h>
+#include <limits.h>
 
 #include "murmur.h"
 #include "dablooms.h"
@@ -21,11 +22,39 @@
 #define ERROR_TIGHTENING_RATIO 0.5
 #define SALT_CONSTANT 0x97c29b3a
 
+/****
+ *
+ * Returns the version string of the dablooms library
+ *
+ * This function provides the current version of the dablooms dynamic bloom
+ * filter implementation.
+ *
+ * Arguments:
+ *   None
+ *
+ * Returns:
+ *   Pointer to a constant string containing the version number
+ *
+ ****/
 const char *dablooms_version(void)
 {
     return DABLOOMS_VERSION;
 }
 
+/****
+ *
+ * Frees a bitmap structure and releases associated resources
+ *
+ * This function unmaps the memory-mapped bitmap array, closes the file
+ * descriptor, and frees the bitmap structure itself.
+ *
+ * Arguments:
+ *   bitmap - Pointer to the bitmap structure to free
+ *
+ * Returns:
+ *   None (void)
+ *
+ ****/
 void free_bitmap(bitmap_t *bitmap)
 {
     if ((munmap(bitmap->array, bitmap->bytes)) < 0) {
@@ -35,6 +64,23 @@ void free_bitmap(bitmap_t *bitmap)
     free(bitmap);
 }
 
+/****
+ *
+ * Resizes a bitmap by changing its underlying memory mapping
+ *
+ * This function grows or shrinks a bitmap's memory mapping to accommodate
+ * a new size. It handles file truncation and memory remapping, using
+ * mremap() on Linux for efficiency or unmapping/remapping on other systems.
+ *
+ * Arguments:
+ *   bitmap - Pointer to the bitmap structure to resize
+ *   old_size - Previous size of the bitmap in bytes
+ *   new_size - New desired size of the bitmap in bytes
+ *
+ * Returns:
+ *   Pointer to the resized bitmap on success, NULL on error
+ *
+ ****/
 bitmap_t *bitmap_resize(bitmap_t *bitmap, size_t old_size, size_t new_size)
 {
     int fd = bitmap->fd;
@@ -88,8 +134,22 @@ bitmap_t *bitmap_resize(bitmap_t *bitmap, size_t old_size, size_t new_size)
     return bitmap;
 }
 
-/* Create a new bitmap, not full featured, simple to give
- * us a means of interacting with the 4 bit counters */
+/****
+ *
+ * Creates a new bitmap structure with memory-mapped storage
+ *
+ * This function allocates and initializes a new bitmap structure that
+ * provides a means of interacting with 4-bit counters through memory
+ * mapping. The bitmap is backed by a file descriptor.
+ *
+ * Arguments:
+ *   fd - File descriptor for the backing file
+ *   bytes - Size of the bitmap in bytes
+ *
+ * Returns:
+ *   Pointer to the new bitmap structure on success, NULL on error
+ *
+ ****/
 bitmap_t *new_bitmap(int fd, size_t bytes)
 {
     bitmap_t *bitmap;
@@ -109,6 +169,23 @@ bitmap_t *new_bitmap(int fd, size_t bytes)
     return bitmap;
 }
 
+/****
+ *
+ * Increments a 4-bit counter in the bitmap at the specified index
+ *
+ * This function increments one of the 4-bit counters stored in the bitmap.
+ * Two counters are packed into each byte, with even indices using the upper
+ * 4 bits and odd indices using the lower 4 bits.
+ *
+ * Arguments:
+ *   bitmap - Pointer to the bitmap structure
+ *   index - Index of the 4-bit counter to increment
+ *   offset - Byte offset within the bitmap array
+ *
+ * Returns:
+ *   0 on success, -1 on overflow (counter already at maximum value 15)
+ *
+ ****/
 int bitmap_increment(bitmap_t *bitmap, unsigned int index, long offset)
 {
     long access = index / 2 + offset;
@@ -131,7 +208,23 @@ int bitmap_increment(bitmap_t *bitmap, unsigned int index, long offset)
     return 0;
 }
 
-/* increments the four bit counter */
+/****
+ *
+ * Decrements a 4-bit counter in the bitmap at the specified index
+ *
+ * This function decrements one of the 4-bit counters stored in the bitmap.
+ * Two counters are packed into each byte, with even indices using the upper
+ * 4 bits and odd indices using the lower 4 bits.
+ *
+ * Arguments:
+ *   bitmap - Pointer to the bitmap structure
+ *   index - Index of the 4-bit counter to decrement
+ *   offset - Byte offset within the bitmap array
+ *
+ * Returns:
+ *   0 on success, -1 on underflow (counter already at minimum value 0)
+ *
+ ****/
 int bitmap_decrement(bitmap_t *bitmap, unsigned int index, long offset)
 {
     long access = index / 2 + offset;
@@ -155,7 +248,23 @@ int bitmap_decrement(bitmap_t *bitmap, unsigned int index, long offset)
     return 0;
 }
 
-/* decrements the four bit counter */
+/****
+ *
+ * Checks the value of a 4-bit counter in the bitmap at the specified index
+ *
+ * This function reads the value of one of the 4-bit counters stored in the
+ * bitmap. Two counters are packed into each byte, with even indices using
+ * the upper 4 bits and odd indices using the lower 4 bits.
+ *
+ * Arguments:
+ *   bitmap - Pointer to the bitmap structure
+ *   index - Index of the 4-bit counter to check
+ *   offset - Byte offset within the bitmap array
+ *
+ * Returns:
+ *   The value of the 4-bit counter (0-15) with appropriate bit masking
+ *
+ ****/
 int bitmap_check(bitmap_t *bitmap, unsigned int index, long offset)
 {
     long access = index / 2 + offset;
@@ -166,6 +275,20 @@ int bitmap_check(bitmap_t *bitmap, unsigned int index, long offset)
     }
 }
 
+/****
+ *
+ * Flushes bitmap changes to disk storage
+ *
+ * This function synchronizes the memory-mapped bitmap array with its
+ * backing file on disk using msync() to ensure data persistence.
+ *
+ * Arguments:
+ *   bitmap - Pointer to the bitmap structure to flush
+ *
+ * Returns:
+ *   0 on success, -1 on error
+ *
+ ****/
 int bitmap_flush(bitmap_t *bitmap)
 {
     if ((msync(bitmap->array, bitmap->bytes, MS_SYNC) < 0)) {
@@ -176,15 +299,25 @@ int bitmap_flush(bitmap_t *bitmap)
     }
 }
 
-/*
- * Perform the actual hashing for `key`
+/****
  *
- * Only call the hash once to get a pair of initial values (h1 and
- * h2). Use these values to generate all hashes in a quick loop.
+ * Performs hash computation for bloom filter key insertion/lookup
  *
- * See paper by Kirsch, Mitzenmacher [2006]
- * http://www.eecs.harvard.edu/~michaelm/postscripts/rsa2008.pdf
- */
+ * This function computes multiple hash values for a given key using the
+ * double hashing technique described by Kirsch and Mitzenmacher (2006).
+ * It uses MurmurHash3 to generate two initial hash values, then derives
+ * additional hash functions through linear combination.
+ *
+ * Arguments:
+ *   bloom - Pointer to the counting bloom filter structure
+ *   key - The key string to hash
+ *   key_len - Length of the key string in bytes
+ *   hashes - Array to store the computed hash values
+ *
+ * Returns:
+ *   None (void) - results are stored in the hashes array
+ *
+ ****/
 void hash_func(counting_bloom_t *bloom, const char *key, size_t key_len, uint32_t *hashes)
 {
     int i;
@@ -199,6 +332,20 @@ void hash_func(counting_bloom_t *bloom, const char *key, size_t key_len, uint32_
     }
 }
 
+/****
+ *
+ * Frees a counting bloom filter structure and its associated memory
+ *
+ * This function deallocates all memory associated with a counting bloom
+ * filter, including the hash array, bitmap, and the structure itself.
+ *
+ * Arguments:
+ *   bloom - Pointer to the counting bloom filter structure to free
+ *
+ * Returns:
+ *   Always returns 0
+ *
+ ****/
 int free_counting_bloom(counting_bloom_t *bloom)
 {
     if (bloom != NULL) {
@@ -211,12 +358,40 @@ int free_counting_bloom(counting_bloom_t *bloom)
     return 0;
 }
 
+/****
+ *
+ * Initializes a counting bloom filter with specified parameters
+ *
+ * This function creates and initializes a counting bloom filter structure
+ * with the given capacity and error rate. It calculates the optimal number
+ * of hash functions and bit array size based on bloom filter theory.
+ *
+ * Arguments:
+ *   capacity - Maximum number of elements the filter should hold
+ *   error_rate - Desired false positive probability (0.0 to 1.0)
+ *   offset - Byte offset for the filter data in the backing storage
+ *
+ * Returns:
+ *   Pointer to the initialized counting bloom filter on success, NULL on error
+ *
+ ****/
 counting_bloom_t *counting_bloom_init(unsigned int capacity, double error_rate, long offset)
 {
     counting_bloom_t *bloom;
     
+    /* Validate input parameters */
+    if (capacity < 1000 || capacity > UINT_MAX / 100) {
+        fprintf(stderr, "Error, invalid capacity for bloom filter\n");
+        return NULL;
+    }
+    
+    if (error_rate <= 0.0 || error_rate >= 1.0) {
+        fprintf(stderr, "Error, error rate must be between 0.0 and 1.0\n");
+        return NULL;
+    }
+    
     if ((bloom = malloc(sizeof(counting_bloom_t))) == NULL) {
-        fprintf(stderr, "Error, could not realloc a new bloom filter\n");
+        fprintf(stderr, "Error, could not allocate new bloom filter\n");
         return NULL;
     }
     bloom->bitmap = NULL;
@@ -233,6 +408,23 @@ counting_bloom_t *counting_bloom_init(unsigned int capacity, double error_rate, 
     return bloom;
 }
 
+/****
+ *
+ * Creates a new counting bloom filter backed by a file
+ *
+ * This function creates a new counting bloom filter with the specified
+ * capacity and error rate, backed by a file for persistent storage.
+ * The file is created or truncated if it already exists.
+ *
+ * Arguments:
+ *   capacity - Maximum number of elements the filter should hold
+ *   error_rate - Desired false positive probability (0.0 to 1.0)
+ *   filename - Path to the file that will back the bloom filter
+ *
+ * Returns:
+ *   Pointer to the new counting bloom filter on success, NULL on error
+ *
+ ****/
 counting_bloom_t *new_counting_bloom(unsigned int capacity, double error_rate, const char *filename)
 {
     counting_bloom_t *cur_bloom;
@@ -250,6 +442,23 @@ counting_bloom_t *new_counting_bloom(unsigned int capacity, double error_rate, c
     return cur_bloom;
 }
 
+/****
+ *
+ * Adds an element to the counting bloom filter
+ *
+ * This function adds a string element to the counting bloom filter by
+ * computing hash values and incrementing the corresponding counters in
+ * the bitmap. The element count is also incremented.
+ *
+ * Arguments:
+ *   bloom - Pointer to the counting bloom filter structure
+ *   s - String element to add to the filter
+ *   len - Length of the string element in bytes
+ *
+ * Returns:
+ *   Always returns 0
+ *
+ ****/
 int counting_bloom_add(counting_bloom_t *bloom, const char *s, size_t len)
 {
     unsigned int index, i, offset;
@@ -267,6 +476,23 @@ int counting_bloom_add(counting_bloom_t *bloom, const char *s, size_t len)
     return 0;
 }
 
+/****
+ *
+ * Removes an element from the counting bloom filter
+ *
+ * This function removes a string element from the counting bloom filter
+ * by computing hash values and decrementing the corresponding counters
+ * in the bitmap. The element count is also decremented.
+ *
+ * Arguments:
+ *   bloom - Pointer to the counting bloom filter structure
+ *   s - String element to remove from the filter
+ *   len - Length of the string element in bytes
+ *
+ * Returns:
+ *   Always returns 0
+ *
+ ****/
 int counting_bloom_remove(counting_bloom_t *bloom, const char *s, size_t len)
 {
     unsigned int index, i, offset;
@@ -284,6 +510,23 @@ int counting_bloom_remove(counting_bloom_t *bloom, const char *s, size_t len)
     return 0;
 }
 
+/****
+ *
+ * Checks if an element exists in the counting bloom filter
+ *
+ * This function tests whether a string element is present in the counting
+ * bloom filter by computing hash values and checking if all corresponding
+ * counters in the bitmap are non-zero.
+ *
+ * Arguments:
+ *   bloom - Pointer to the counting bloom filter structure
+ *   s - String element to check for presence in the filter
+ *   len - Length of the string element in bytes
+ *
+ * Returns:
+ *   1 if the element is probably in the filter, 0 if definitely not in the filter
+ *
+ ****/
 int counting_bloom_check(counting_bloom_t *bloom, const char *s, size_t len)
 {
     unsigned int index, i, offset;
@@ -301,6 +544,21 @@ int counting_bloom_check(counting_bloom_t *bloom, const char *s, size_t len)
     return 1;
 }
 
+/****
+ *
+ * Frees a scaling bloom filter structure and all associated memory
+ *
+ * This function deallocates all memory associated with a scaling bloom
+ * filter, including all individual bloom filters in the array, the bitmap,
+ * and the scaling structure itself.
+ *
+ * Arguments:
+ *   bloom - Pointer to the scaling bloom filter structure to free
+ *
+ * Returns:
+ *   Always returns 0
+ *
+ ****/
 int free_scaling_bloom(scaling_bloom_t *bloom)
 {
     int i;
@@ -316,7 +574,21 @@ int free_scaling_bloom(scaling_bloom_t *bloom)
     return 0;
 }
 
-/* creates a new counting bloom filter from a given scaling bloom filter, with count and id */
+/****
+ *
+ * Creates a new counting bloom filter as part of a scaling bloom filter
+ *
+ * This function creates a new counting bloom filter that becomes part of
+ * a scaling bloom filter. It adjusts the error rate using a tightening
+ * ratio and resizes the backing bitmap to accommodate the new filter.
+ *
+ * Arguments:
+ *   bloom - Pointer to the scaling bloom filter structure
+ *
+ * Returns:
+ *   Pointer to the new counting bloom filter on success, NULL on error
+ *
+ ****/
 counting_bloom_t *new_counting_bloom_from_scale(scaling_bloom_t *bloom)
 {
     int i;
@@ -352,6 +624,23 @@ counting_bloom_t *new_counting_bloom_from_scale(scaling_bloom_t *bloom)
     return cur_bloom;
 }
 
+/****
+ *
+ * Creates a counting bloom filter from an existing file
+ *
+ * This function loads a counting bloom filter from a file that was
+ * previously created with the same capacity and error rate parameters.
+ * It validates that the file size matches the expected size.
+ *
+ * Arguments:
+ *   capacity - Expected maximum number of elements the filter should hold
+ *   error_rate - Expected false positive probability (0.0 to 1.0)
+ *   filename - Path to the file containing the bloom filter data
+ *
+ * Returns:
+ *   Pointer to the counting bloom filter on success, NULL on error
+ *
+ ****/
 counting_bloom_t *new_counting_bloom_from_file(unsigned int capacity, double error_rate, const char *filename)
 {
     int fd;
@@ -390,6 +679,21 @@ counting_bloom_t *new_counting_bloom_from_file(unsigned int capacity, double err
     return bloom;
 }
 
+/****
+ *
+ * Clears sequence numbers for scaling bloom filter synchronization
+ *
+ * This function manages sequence numbers used for synchronizing changes
+ * between memory and disk. It clears the disk sequence number if set,
+ * flushes changes to disk, and returns the current memory sequence number.
+ *
+ * Arguments:
+ *   bloom - Pointer to the scaling bloom filter structure
+ *
+ * Returns:
+ *   The previous memory sequence number before clearing
+ *
+ ****/
 uint64_t scaling_bloom_clear_seqnums(scaling_bloom_t *bloom)
 {
     uint64_t seqnum;
@@ -404,6 +708,25 @@ uint64_t scaling_bloom_clear_seqnums(scaling_bloom_t *bloom)
     return seqnum;
 }
 
+/****
+ *
+ * Adds an element to the scaling bloom filter with ID tracking
+ *
+ * This function adds a string element to the scaling bloom filter,
+ * finding the appropriate sub-filter based on the ID. If the current
+ * filter is at capacity, it creates a new sub-filter to maintain
+ * the scaling property.
+ *
+ * Arguments:
+ *   bloom - Pointer to the scaling bloom filter structure
+ *   s - String element to add to the filter
+ *   len - Length of the string element in bytes
+ *   id - Unique identifier associated with the element
+ *
+ * Returns:
+ *   Always returns 1
+ *
+ ****/
 int scaling_bloom_add(scaling_bloom_t *bloom, const char *s, size_t len, uint64_t id)
 {
     int i;
@@ -434,6 +757,24 @@ int scaling_bloom_add(scaling_bloom_t *bloom, const char *s, size_t len, uint64_
     return 1;
 }
 
+/****
+ *
+ * Removes an element from the scaling bloom filter with ID tracking
+ *
+ * This function removes a string element from the scaling bloom filter,
+ * finding the appropriate sub-filter based on the ID. It searches through
+ * the sub-filters in reverse order to find the correct one.
+ *
+ * Arguments:
+ *   bloom - Pointer to the scaling bloom filter structure
+ *   s - String element to remove from the filter
+ *   len - Length of the string element in bytes
+ *   id - Unique identifier associated with the element
+ *
+ * Returns:
+ *   1 if the element was found and removed, 0 if not found
+ *
+ ****/
 int scaling_bloom_remove(scaling_bloom_t *bloom, const char *s, size_t len, uint64_t id)
 {
     counting_bloom_t *cur_bloom;
@@ -454,6 +795,23 @@ int scaling_bloom_remove(scaling_bloom_t *bloom, const char *s, size_t len, uint
     return 0;
 }
 
+/****
+ *
+ * Checks if an element exists in the scaling bloom filter
+ *
+ * This function tests whether a string element is present in any of the
+ * sub-filters within the scaling bloom filter. It searches through all
+ * sub-filters in reverse order.
+ *
+ * Arguments:
+ *   bloom - Pointer to the scaling bloom filter structure
+ *   s - String element to check for presence in the filter
+ *   len - Length of the string element in bytes
+ *
+ * Returns:
+ *   1 if the element is probably in the filter, 0 if definitely not in the filter
+ *
+ ****/
 int scaling_bloom_check(scaling_bloom_t *bloom, const char *s, size_t len)
 {
     int i;
@@ -467,6 +825,80 @@ int scaling_bloom_check(scaling_bloom_t *bloom, const char *s, size_t len)
     return 0;
 }
 
+/****
+ *
+ * Performs atomic check-and-add operation on scaling bloom filter
+ *
+ * This function combines checking for element existence and adding it
+ * if not present, avoiding duplicate hash computation. It first checks
+ * all sub-filters for the element, and if not found, adds it to the
+ * appropriate sub-filter.
+ *
+ * Arguments:
+ *   bloom - Pointer to the scaling bloom filter structure
+ *   s - String element to check and potentially add
+ *   len - Length of the string element in bytes
+ *   id - Unique identifier associated with the element
+ *
+ * Returns:
+ *   1 if the element already existed, 0 if it was newly added
+ *
+ ****/
+int scaling_bloom_check_add(scaling_bloom_t *bloom, const char *s, size_t len, uint64_t id)
+{
+    int i, found = 0;
+    counting_bloom_t *cur_bloom = NULL;
+    
+    /* First check if item exists in any bloom filter */
+    for (i = bloom->num_blooms - 1; i >= 0; i--) {
+        cur_bloom = bloom->blooms[i];
+        if (counting_bloom_check(cur_bloom, s, len)) {
+            return 1; /* Already exists */
+        }
+        /* Find the appropriate bloom filter for adding */
+        if (!found && id >= cur_bloom->header->id) {
+            found = 1;
+        }
+    }
+    
+    /* Item doesn't exist, so add it */
+    uint64_t seqnum = scaling_bloom_clear_seqnums(bloom);
+    
+    /* Use the appropriate bloom filter or create new one if needed */
+    if (!found) {
+        cur_bloom = bloom->blooms[bloom->num_blooms - 1];
+    }
+    
+    if ((id > bloom->header->max_id) && (cur_bloom->header->count >= cur_bloom->capacity - 1)) {
+        cur_bloom = new_counting_bloom_from_scale(bloom);
+        cur_bloom->header->count = 0;
+        cur_bloom->header->id = bloom->header->max_id + 1;
+    }
+    if (bloom->header->max_id < id) {
+        bloom->header->max_id = id;
+    }
+    counting_bloom_add(cur_bloom, s, len);
+    
+    bloom->header->mem_seqnum = seqnum + 1;
+    
+    return 0; /* New item added */
+}
+
+/****
+ *
+ * Flushes scaling bloom filter changes to disk storage
+ *
+ * This function synchronizes the scaling bloom filter with its backing
+ * file on disk. It ensures all changes are written before updating the
+ * disk sequence number for proper synchronization.
+ *
+ * Arguments:
+ *   bloom - Pointer to the scaling bloom filter structure to flush
+ *
+ * Returns:
+ *   0 on success, -1 on error
+ *
+ ****/
 int scaling_bloom_flush(scaling_bloom_t *bloom)
 {
     if (bitmap_flush(bloom->bitmap) != 0) {
@@ -480,16 +912,63 @@ int scaling_bloom_flush(scaling_bloom_t *bloom)
     return 0;
 }
 
+/****
+ *
+ * Returns the current memory sequence number of the scaling bloom filter
+ *
+ * This function provides access to the memory sequence number used for
+ * tracking changes to the scaling bloom filter in memory.
+ *
+ * Arguments:
+ *   bloom - Pointer to the scaling bloom filter structure
+ *
+ * Returns:
+ *   Current memory sequence number
+ *
+ ****/
 uint64_t scaling_bloom_mem_seqnum(scaling_bloom_t *bloom)
 {
     return bloom->header->mem_seqnum;
 }
 
+/****
+ *
+ * Returns the current disk sequence number of the scaling bloom filter
+ *
+ * This function provides access to the disk sequence number used for
+ * tracking changes to the scaling bloom filter that have been persisted
+ * to disk storage.
+ *
+ * Arguments:
+ *   bloom - Pointer to the scaling bloom filter structure
+ *
+ * Returns:
+ *   Current disk sequence number
+ *
+ ****/
 uint64_t scaling_bloom_disk_seqnum(scaling_bloom_t *bloom)
 {
     return bloom->header->disk_seqnum;
 }
 
+/****
+ *
+ * Initializes a scaling bloom filter with specified parameters
+ *
+ * This function creates and initializes a scaling bloom filter structure
+ * with the given capacity and error rate. It sets up the initial bitmap
+ * and header structure for the scaling filter.
+ *
+ * Arguments:
+ *   capacity - Maximum number of elements each sub-filter should hold
+ *   error_rate - Desired false positive probability (0.0 to 1.0)
+ *   filename - Path to the file that will back the bloom filter
+ *   fd - File descriptor for the backing file
+ *
+ * Returns:
+ *   Pointer to the initialized scaling bloom filter on success, NULL on error
+ *
+ ****/
 scaling_bloom_t *scaling_bloom_init(unsigned int capacity, double error_rate, const char *filename, int fd)
 {
     scaling_bloom_t *bloom;
@@ -514,6 +993,24 @@ scaling_bloom_t *scaling_bloom_init(unsigned int capacity, double error_rate, co
     return bloom;
 }
 
+/****
+ *
+ * Creates a new scaling bloom filter backed by a file
+ *
+ * This function creates a new scaling bloom filter with the specified
+ * capacity and error rate, backed by a file for persistent storage.
+ * It initializes the filter with one sub-filter and sets up the
+ * initial sequence numbers.
+ *
+ * Arguments:
+ *   capacity - Maximum number of elements each sub-filter should hold
+ *   error_rate - Desired false positive probability (0.0 to 1.0)
+ *   filename - Path to the file that will back the bloom filter
+ *
+ * Returns:
+ *   Pointer to the new scaling bloom filter on success, NULL on error
+ *
+ ****/
 scaling_bloom_t *new_scaling_bloom(unsigned int capacity, double error_rate, const char *filename)
 {
 
@@ -541,6 +1038,23 @@ scaling_bloom_t *new_scaling_bloom(unsigned int capacity, double error_rate, con
     return bloom;
 }
 
+/****
+ *
+ * Creates a scaling bloom filter from an existing file
+ *
+ * This function loads a scaling bloom filter from a file that was
+ * previously created. It reconstructs all sub-filters from the file
+ * data and validates that the file size matches the expected size.
+ *
+ * Arguments:
+ *   capacity - Expected maximum number of elements each sub-filter should hold
+ *   error_rate - Expected false positive probability (0.0 to 1.0)
+ *   filename - Path to the file containing the scaling bloom filter data
+ *
+ * Returns:
+ *   Pointer to the scaling bloom filter on success, NULL on error
+ *
+ ****/
 scaling_bloom_t *new_scaling_bloom_from_file(unsigned int capacity, double error_rate, const char *filename)
 {
     int fd;

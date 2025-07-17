@@ -6,3 +6,7 @@ Version 0.3 (Aug 30, 2017):
 
 * Minor bug fixes.
 
+Version 0.4 (Jul 17, 2025):
+
+* Minor security enhancements
+* Added scaling bloom for stream input

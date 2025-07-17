@@ -2,7 +2,7 @@
  *
  * Description: Memory Helper Functions
  * 
- * Copyright (c) 2009-2019, Ron Dilley
+ * Copyright (c) 2009-2025, Ron Dilley
  * All rights reserved.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -67,8 +67,17 @@ extern int quit;
 
 /****
  *
- * Copy argv into a newly malloced buffer.  Arguments are concatenated
- * with spaces in between each argument.
+ * Copy argv into a newly malloced buffer with space-separated arguments
+ *
+ * Concatenates all command-line arguments from argv into a single
+ * space-separated string allocated with XMALLOC.
+ *
+ * Arguments:
+ *   argv - Null-terminated array of argument strings
+ *
+ * Returns:
+ *   Pointer to newly allocated string containing concatenated arguments,
+ *   or NULL if no arguments provided
  *
  ****/
 
@@ -104,7 +113,19 @@ PUBLIC char *copy_argv(char *argv[]) {
 
 /****
  *
- * Allocate memory. Checks the return value, aborts if no more memory is available
+ * Allocate memory with debugging support and error checking
+ *
+ * Wrapper around malloc() that checks return value and aborts program
+ * if allocation fails. In debug mode, tracks allocation in linked list
+ * for memory leak detection.
+ *
+ * Arguments:
+ *   size - Number of bytes to allocate
+ *   filename - Source file name for debugging (via macro)
+ *   linenumber - Source line number for debugging (via macro)
+ *
+ * Returns:
+ *   Pointer to allocated memory, zeroed out
  *
  ****/
 
@@ -165,7 +186,20 @@ void *xmalloc_( const size_t size, const char *filename, const int linenumber) {
 
 /****
  *
- * copy from one place to another
+ * Safe memory copy with overlap detection and bounds checking
+ *
+ * Wrapper around memcpy/memmove that performs bounds checking in debug mode
+ * and automatically detects overlapping regions to use memmove when needed.
+ *
+ * Arguments:
+ *   d_ptr - Destination buffer pointer
+ *   s_ptr - Source buffer pointer
+ *   size - Number of bytes to copy
+ *   filename - Source file name for debugging (via macro)
+ *   linenumber - Source line number for debugging (via macro)
+ *
+ * Returns:
+ *   Pointer to destination buffer
  *
  ****/
 
@@ -270,7 +304,21 @@ void *xmemcpy_( void *d_ptr, void *s_ptr, const size_t size, const char *filenam
 
 /****
  *
- * copy from one place to another
+ * Safe memory copy with length parameter and bounds checking
+ *
+ * Similar to xmemcpy_ but with additional length parameter for
+ * more precise control over copying operations.
+ *
+ * Arguments:
+ *   d_ptr - Destination buffer pointer
+ *   s_ptr - Source buffer pointer
+ *   len - Maximum length to copy
+ *   size - Buffer size for bounds checking
+ *   filename - Source file name for debugging (via macro)
+ *   linenumber - Source line number for debugging (via macro)
+ *
+ * Returns:
+ *   Pointer to destination buffer
  *
  ****/
 
@@ -375,7 +423,20 @@ char *xmemncpy_( char *d_ptr, const char *s_ptr, const size_t len, const int siz
 
 /****
  *
- * set memory area
+ * Set memory area to specified value with null pointer checking
+ *
+ * Wrapper around memset() that checks for null pointers and uses
+ * bzero() for zero values for better performance.
+ *
+ * Arguments:
+ *   ptr - Pointer to memory area to set
+ *   value - Value to set each byte to
+ *   size - Number of bytes to set
+ *   filename - Source file name for debugging (via macro)
+ *   linenumber - Source line number for debugging (via macro)
+ *
+ * Returns:
+ *   Pointer to memory area
  *
  ****/
 
@@ -404,7 +465,19 @@ void *xmemset_( void *ptr, const char value, const size_t size, const char *file
 
 /****
  *
- * Allocate memory. Checks the return value, aborts if no more memory is available
+ * Reallocate memory with debugging support and error checking
+ *
+ * Wrapper around realloc() that validates parameters and tracks
+ * size changes in debug mode. Aborts program if reallocation fails.
+ *
+ * Arguments:
+ *   ptr - Pointer to previously allocated memory
+ *   size - New size in bytes
+ *   filename - Source file name for debugging (via macro)
+ *   linenumber - Source line number for debugging (via macro)
+ *
+ * Returns:
+ *   Pointer to reallocated memory
  *
  ****/
 
@@ -480,7 +553,18 @@ void *xrealloc_( void *ptr, size_t size, const char *filename, const int linenum
 
 /****
  *
- * Free memory. Merely a wrapper for the case that we want to keep track of allocations.
+ * Free memory with debugging support and null pointer checking
+ *
+ * Wrapper around free() that validates pointer and removes allocation
+ * from debug tracking list in debug mode.
+ *
+ * Arguments:
+ *   ptr - Pointer to memory to free
+ *   filename - Source file name for debugging (via macro)
+ *   linenumber - Source line number for debugging (via macro)
+ *
+ * Returns:
+ *   None
  *
  ****/
 
@@ -539,7 +623,17 @@ void xfree_( void *ptr, const char *filename, const int linenumber ) {
 
 /****
  *
- * free all known buffers
+ * Free all tracked memory allocations (debug mode only)
+ *
+ * Walks through the debug allocation list and frees all tracked
+ * memory buffers and their associated debug structures.
+ *
+ * Arguments:
+ *   filename - Source file name for debugging (via macro)
+ *   linenumber - Source line number for debugging (via macro)
+ *
+ * Returns:
+ *   None
  *
  ****/
 
@@ -575,7 +669,18 @@ void xfree_all_( const char *filename, const int linenumber ) {
 
 /****
  *
- * Dup a string
+ * Duplicate a string with memory tracking
+ *
+ * Wrapper around strdup() that provides debug tracking of the
+ * allocated memory for the duplicated string.
+ *
+ * Arguments:
+ *   str - String to duplicate
+ *   filename - Source file name for debugging (via macro)
+ *   linenumber - Source line number for debugging (via macro)
+ *
+ * Returns:
+ *   Pointer to newly allocated duplicate string
  *
  ****/
 
@@ -593,7 +698,21 @@ char *xstrdup_( const char *str, const char *filename, const int linenumber ) {
 
 /****
  *
- * grow or shrink an array
+ * Grow or shrink an array with element size management
+ *
+ * Reallocates an array to a new size, preserving existing elements
+ * and zeroing new elements. Handles memory allocation and copying.
+ *
+ * Arguments:
+ *   old - Pointer to pointer to existing array
+ *   elementSize - Size of each array element in bytes
+ *   oldCount - Pointer to current element count
+ *   newCount - New element count
+ *   filename - Source file name for debugging (via macro)
+ *   linenumber - Source line number for debugging (via macro)
+ *
+ * Returns:
+ *   None (modifies old pointer and oldCount in place)
  *
  ****/
 
@@ -634,7 +753,19 @@ void xgrow_( void **old, int elementSize, int *oldCount, int newCount, char *fil
 
 /****
  *
- * wraper around strcpy
+ * Safe string copy with bounds checking and overlap detection
+ *
+ * Wrapper around strcpy() that performs bounds checking in debug mode
+ * and uses memcpy/memmove to handle overlapping regions safely.
+ *
+ * Arguments:
+ *   d_ptr - Destination string buffer
+ *   s_ptr - Source string to copy
+ *   filename - Source file name for debugging (via macro)
+ *   linenumber - Source line number for debugging (via macro)
+ *
+ * Returns:
+ *   Pointer to destination string
  *
  ****/
 
@@ -749,7 +880,20 @@ char *xstrcpy_( char *d_ptr, const char *s_ptr, const char *filename, const int 
 
 /****
  *
- * wraper around strncpy
+ * Safe string copy with length limit and bounds checking
+ *
+ * Wrapper around strncpy() that performs bounds checking in debug mode
+ * and validates all parameters before copying.
+ *
+ * Arguments:
+ *   d_ptr - Destination string buffer
+ *   s_ptr - Source string to copy
+ *   len - Maximum number of characters to copy
+ *   filename - Source file name for debugging (via macro)
+ *   linenumber - Source line number for debugging (via macro)
+ *
+ * Returns:
+ *   Pointer to destination string
  *
  ****/
 

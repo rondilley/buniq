@@ -1,10 +1,10 @@
 dnl Process this file with autoconf to produce a configure script
-m4_include([version.m4])
-AC_PREREQ([2.59])
-AC_INIT([Bloom Filter Unique], VERSION_NUMBER, [ron.dilley@uberadmin.com], [buniq], [http://www.uberadmin.com/Projects/buniq/])
+AC_PREREQ([2.69])
+m4_define([BUNIQ_VERSION], [0.4])
+AC_INIT([Bloom Filter Unique], BUNIQ_VERSION, [ron.dilley@uberadmin.com], [buniq], [http://www.uberadmin.com/Projects/buniq/])
 AC_CONFIG_SRCDIR(src/main.c)
 AC_CONFIG_AUX_DIR(config)
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 
 dnl Checks for programs
 AC_PROG_CC
@@ -61,13 +61,90 @@ AC_ARG_ENABLE(gprof,
       fi
     ],)
 
+dnl ############## Security Hardening Options
+
+HARDENING="yes"
+AC_ARG_ENABLE(hardening,
+    [  --disable-hardening     Disable security hardening],
+    [ if test "$enableval" = "no"; then
+          HARDENING="no"
+      fi
+    ],)
+
+if test "$HARDENING" = "yes"; then
+    if test "$GCC" = yes; then
+        dnl Stack protection
+        CFLAGS="${CFLAGS} -fstack-protector-strong"
+        CFLAGS="${CFLAGS} -fstack-clash-protection"
+        
+        dnl Fortify source (requires -O1 or higher)
+        CFLAGS="${CFLAGS} -D_FORTIFY_SOURCE=2"
+        
+        dnl Position Independent Executable
+        CFLAGS="${CFLAGS} -fPIE"
+        LDFLAGS="${LDFLAGS} -pie"
+        
+        dnl Relocation Read-Only
+        LDFLAGS="${LDFLAGS} -Wl,-z,relro,-z,now"
+        
+        dnl Security warnings
+        CFLAGS="${CFLAGS} -Wall -Wextra -Wformat=2 -Wformat-security"
+        CFLAGS="${CFLAGS} -Wstrict-prototypes -Wmissing-prototypes"
+        CFLAGS="${CFLAGS} -Wshadow -Wpointer-arith -Wcast-qual"
+        CFLAGS="${CFLAGS} -Wwrite-strings -Wmissing-declarations"
+        CFLAGS="${CFLAGS} -Wredundant-decls -Wnested-externs"
+        CFLAGS="${CFLAGS} -Winline -Wno-long-long -Wunused-variable"
+        CFLAGS="${CFLAGS} -Wstrict-aliasing=2 -Wundef"
+        
+        dnl Buffer overflow protection
+        CFLAGS="${CFLAGS} -Warray-bounds -Wformat-overflow=2"
+        CFLAGS="${CFLAGS} -Wstringop-overflow=4"
+        
+        dnl Control flow integrity
+        CFLAGS="${CFLAGS} -fcf-protection=full"
+        
+        dnl Additional security flags (GCC >= 8)
+        CFLAGS="${CFLAGS} -fstack-clash-protection"
+        
+        dnl Remove debug symbols in release builds
+        if test "$DEBUG" = "no"; then
+            LDFLAGS="${LDFLAGS} -Wl,-s"
+        fi
+    fi
+fi
+
+ASAN="no"
+AC_ARG_ENABLE(asan,
+    [  --enable-asan           Enable AddressSanitizer],
+    [ if test "$GCC" = yes; then
+          ASAN="yes"
+          CFLAGS="${CFLAGS} -fsanitize=address -fsanitize=undefined"
+          CFLAGS="${CFLAGS} -fno-omit-frame-pointer"
+          LDFLAGS="${LDFLAGS} -fsanitize=address -fsanitize=undefined"
+      fi
+    ],)
+
+STATIC_ANALYSIS="no"
+AC_ARG_ENABLE(static-analysis,
+    [  --enable-static-analysis Enable static analysis warnings],
+    [ if test "$GCC" = yes; then
+          STATIC_ANALYSIS="yes"
+          CFLAGS="${CFLAGS} -fanalyzer"
+          CFLAGS="${CFLAGS} -Wanalyzer-too-complex"
+          CFLAGS="${CFLAGS} -Wanalyzer-null-dereference"
+          CFLAGS="${CFLAGS} -Wanalyzer-use-after-free"
+          CFLAGS="${CFLAGS} -Wanalyzer-double-free"
+          CFLAGS="${CFLAGS} -Wanalyzer-malloc-leak"
+      fi
+    ],)
+
 dnl ############# System Dependencies
 
 AC_MSG_CHECKING([for special system dependencies])
 
 AC_CANONICAL_HOST
 AC_C_CONST
-AC_PROG_GCC_TRADITIONAL
+dnl AC_PROG_GCC_TRADITIONAL is obsolete - removed
 
 dnl Checks for OS type.
 case "$host" in
@@ -192,9 +269,10 @@ AC_TYPE_UINT8_T
 AC_TYPE_INT8_T
 AC_TYPE_UINT64_T
 
-AM_CONFIG_HEADER(include/config.h)
+AC_CONFIG_HEADERS([include/config.h])
 AC_PROG_INSTALL
-AC_OUTPUT(Makefile src/Makefile buniq.1)
+AC_CONFIG_FILES([Makefile src/Makefile buniq.1])
+AC_OUTPUT
 
 BINDIR=`eval echo ${bindir}`; BINDIR=`eval echo ${BINDIR}`;
 MANDIR=`eval echo ${mandir}/${mansubdir}`; MANDIR=`eval echo ${MANDIR}`;
@@ -213,5 +291,8 @@ echo ""
 echo "Enable debugging      : ${DEBUG}"
 echo "Enable mem debugging  : ${MEM_DEBUG}"
 echo "Show mem debugging    : ${SHOW_MEM_DEBUG}"
+echo "Security hardening    : ${HARDENING}"
+echo "AddressSanitizer      : ${ASAN}"
+echo "Static analysis       : ${STATIC_ANALYSIS}"
 echo "-----------------------------------------------"
 echo ""

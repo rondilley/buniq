@@ -11,6 +11,22 @@
 
 #define	FORCE_INLINE inline static
 
+/****
+ *
+ * Rotate left operation for 64-bit integers
+ *
+ * Performs a circular left rotation on a 64-bit value by the specified
+ * number of bits. This is a core operation used in the MurmurHash algorithm
+ * to mix bits and achieve good avalanche properties.
+ *
+ * Arguments:
+ *   x - 64-bit value to rotate
+ *   r - Number of bits to rotate left (0-63)
+ *
+ * Returns:
+ *   64-bit value rotated left by r bits
+ *
+ ****/
 FORCE_INLINE uint64_t rotl64 ( uint64_t x, int8_t r )
 {
 	return (x << r) | (x >> (64 - r));
@@ -25,6 +41,21 @@ FORCE_INLINE uint64_t rotl64 ( uint64_t x, int8_t r )
 //-----------------------------------------------------------------------------
 // Finalization mix - force all bits of a hash block to avalanche
 
+/****
+ *
+ * Finalization mix for 64-bit hash values
+ *
+ * Applies a finalization mix to force all bits of a hash block to avalanche.
+ * This function ensures that small changes in input produce large changes in
+ * output by applying multiple rounds of bit mixing operations.
+ *
+ * Arguments:
+ *   k - 64-bit hash value to finalize
+ *
+ * Returns:
+ *   64-bit finalized hash value with improved avalanche properties
+ *
+ ****/
 FORCE_INLINE uint64_t fmix64(uint64_t k)
 {
 	k ^= k >> 33;
@@ -38,6 +69,26 @@ FORCE_INLINE uint64_t fmix64(uint64_t k)
 
 //-----------------------------------------------------------------------------
 
+/****
+ *
+ * MurmurHash3 128-bit hash function optimized for x64 platforms
+ *
+ * Computes a 128-bit hash value using the MurmurHash3 algorithm optimized
+ * for 64-bit processors. This implementation provides excellent distribution
+ * and speed characteristics for hash table and data deduplication use cases.
+ * The algorithm processes data in 16-byte blocks with a finalization step
+ * for remaining bytes.
+ *
+ * Arguments:
+ *   key - Pointer to the data to hash
+ *   len - Length of the data in bytes
+ *   seed - 32-bit seed value for hash initialization
+ *   out - Pointer to 128-bit output buffer (16 bytes)
+ *
+ * Returns:
+ *   Nothing (void) - result is stored in the out parameter
+ *
+ ****/
 void MurmurHash3_x64_128 ( const void * key, const int len,
 		const uint32_t seed, void * out )
 {

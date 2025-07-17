@@ -56,7 +56,7 @@
 # include <config.h>
 #endif
 
-#include <sysdep.h>
+#include "../include/sysdep.h"
 
 #ifndef __SYSDEP_H__
 # error something is messed up
@@ -73,6 +73,20 @@ typedef unsigned int word;
 typedef unsigned long dword;
 
 /* prog config */
+
+/* Output format enum */
+typedef enum {
+  OUTPUT_TEXT = 0,
+  OUTPUT_JSON,
+  OUTPUT_CSV,
+  OUTPUT_TSV
+} output_format_t;
+
+/* Bloom filter type enum */
+typedef enum {
+  BLOOM_REGULAR = 0,
+  BLOOM_SCALING
+} bloom_type_t;
 
 typedef struct {
   uid_t starting_uid;
@@ -92,6 +106,25 @@ typedef struct {
   time_t current_time;
   pid_t cur_pid;
   int timemark;
+  
+  /* New enhanced features */
+  int num_threads;           /* Number of threads for parallel processing */
+  int show_stats;            /* Show processing statistics */
+  int show_progress;         /* Show progress bar */
+  int show_duplicates;       /* Show duplicate lines instead of unique */
+  int count_duplicates;      /* Count duplicate occurrences */
+  output_format_t output_format; /* Output format */
+  bloom_type_t bloom_type;   /* Bloom filter type */
+  char *save_bloom_file;     /* File to save bloom filter to */
+  char *load_bloom_file;     /* File to load bloom filter from */
+  int adaptive_sizing;       /* Use adaptive bloom filter sizing */
+  
+  /* Statistics */
+  uint64_t total_lines;      /* Total lines processed */
+  uint64_t unique_lines;     /* Unique lines found */
+  uint64_t duplicate_lines;  /* Duplicate lines found */
+  double processing_time;    /* Time taken for processing */
+  size_t memory_used;        /* Memory used by bloom filter */
 } Config_t;
 
 #endif	/* end of COMMON_H */

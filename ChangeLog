@@ -5,3 +5,8 @@
 2017-08-30  Ron Dilley <ron.dilley@uberadmin.com>
 
 	* v0.3 released with minor bug fixes.
+
+2025-07-17  Ron Dilley <ron.dilley@uberadmin.com>
+
+	* Minor security enhancements
+	* Added scaling bloom for stream input

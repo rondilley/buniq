@@ -1,4 +1,4 @@
-.TH BUNIQ 1  "3 Nov 2014" "buniq @VERSION@" "buniq @VERSION@"
+.TH BUNIQ 1  "17 Jul 2025" "buniq @VERSION@" "buniq @VERSION@"
 .SH NAME
 buniq \- Bloom Filter Unique.
 .SH SYNOPSIS

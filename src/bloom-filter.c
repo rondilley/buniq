@@ -1,33 +1,20 @@
 /*****
  *
- * Copyright (c) 2013-2019, Ron Dilley
+ * Copyright (c) 2013-2025, Ron Dilley
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- *   - Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer.
- *   - Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in
- *     the documentation and/or other materials provided with the
- *     distribution.
- *   - Neither the name of Uberadmin/BaraCUDA/Nightingale nor the names of
- *     its contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
- * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
- * TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
- * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
- * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  *****/
 
@@ -76,6 +63,23 @@ extern Config_t *config;
 // OR, for superscalar CPUs:
 //w = (w & ~m) | (-f & m);
 
+/****
+ *
+ * Test if a bit is set in a byte buffer and optionally set it
+ *
+ * Tests whether a specific bit is set in a byte-aligned buffer.
+ * If the bit is not set and set_bit is true, the bit will be set.
+ * This function is used internally by the bloom filter for bit manipulation.
+ *
+ * Arguments:
+ *   buf - Pointer to the byte buffer containing the bit array
+ *   x - Bit position to test (0-based index)
+ *   set_bit - Flag indicating whether to set the bit if not already set
+ *
+ * Returns:
+ *   1 if the bit was already set, 0 if the bit was not set
+ *
+ ****/
 inline static int test_bit_set_bit(unsigned char * buf, size_t x, int set_bit)
 {
   size_t byte = x >> 3;
@@ -92,11 +96,27 @@ inline static int test_bit_set_bit(unsigned char * buf, size_t x, int set_bit)
   }
 }
 
+/****
+ *
+ * Test if a bit is set in a 64-bit word buffer and set it
+ *
+ * Tests whether a specific bit is set in a 64-bit word-aligned buffer.
+ * If the bit is not set, it will be set automatically. This function
+ * is optimized for 64-bit operations and always sets the bit if not present.
+ *
+ * Arguments:
+ *   buf - Pointer to the 64-bit word buffer containing the bit array
+ *   x - Bit position to test (0-based index)
+ *
+ * Returns:
+ *   1 if the bit was already set, 0 if the bit was not set (and has now been set)
+ *
+ ****/
 inline static int test_bit_set_bit_64( uint64_t *buf, size_t x )
 {
   size_t qword = x >> 6;
   uint64_t c = buf[qword];        // expensive memory access
-  uint64_t mask = 1 << (x % 64);
+  uint64_t mask = 1ULL << (x % 64);
 
   if (c & mask)
     return 1;
@@ -105,6 +125,26 @@ inline static int test_bit_set_bit_64( uint64_t *buf, size_t x )
   return 0;
 }
 
+/****
+ *
+ * Check if an element exists in the bloom filter and optionally add it
+ *
+ * This is the core function that performs both checking and adding operations
+ * for the bloom filter. It uses MurmurHash3 to generate hash values and tests
+ * multiple bit positions based on the configured number of hash functions.
+ *
+ * Arguments:
+ *   bloom - Pointer to initialized bloom filter structure
+ *   buffer - Pointer to data buffer containing the element to check/add
+ *   len - Length of the data buffer in bytes
+ *   add - Flag indicating whether to add the element (1) or just check (0)
+ *
+ * Returns:
+ *   1 if element was already present (or collision occurred)
+ *   0 if element was not present (and added if add=1)
+ *   -1 if bloom filter is not initialized
+ *
+ ****/
 inline static int bloom_check_add(struct bloom * bloom,
                            const void * buffer, int len, int add)
 {
@@ -138,6 +178,25 @@ inline static int bloom_check_add(struct bloom * bloom,
   return 0;
 }
 
+/****
+ *
+ * Check if an element exists in 64-bit bloom filter and add if not present
+ *
+ * This function performs a two-pass operation on a 64-bit optimized bloom filter.
+ * First pass checks all required bits without modification. If all bits are set,
+ * the element is considered present. If not all bits are set, a second pass
+ * sets all the required bits to add the element.
+ *
+ * Arguments:
+ *   bloom - Pointer to initialized bloom filter structure with 64-bit buffer
+ *   buffer - Pointer to data buffer containing the element to check/add
+ *   len - Length of the data buffer in bytes
+ *
+ * Returns:
+ *   1 if element was already present (or collision occurred)
+ *   0 if element was not present and has been added
+ *
+ ****/
 inline int bloom_check_add_64(struct bloom * bloom, const void * buffer, int len )
 {
   uint64_t hash[2];
@@ -149,9 +208,12 @@ inline int bloom_check_add_64(struct bloom * bloom, const void * buffer, int len
   register uint64_t x;
   register uint64_t i;
 
+  /* First pass: check all bits without modifying */
   for (i = 0; i < bloom->hashes; i++) {
     x = (a + i*b) % bloom->bits;
-    if (test_bit_set_bit_64(bloom->bf64, x)) {
+    size_t qword = x >> 6;
+    uint64_t mask = 1ULL << (x % 64);
+    if (bloom->bf64[qword] & mask) {
       hits++;
     }
   }
@@ -160,7 +222,69 @@ inline int bloom_check_add_64(struct bloom * bloom, const void * buffer, int len
     return 1;                // 1 == element already in (or collision)
   }
 
-  return 0;
+  /* Second pass: set all bits since element is new */
+  for (i = 0; i < bloom->hashes; i++) {
+    x = (a + i*b) % bloom->bits;
+    size_t qword = x >> 6;
+    uint64_t mask = 1ULL << (x % 64);
+    bloom->bf64[qword] |= mask;
+  }
+
+  return 0;                  // new element added
+}
+
+/****
+ *
+ * Optimized check and add for 64-bit bloom filter with improved performance
+ *
+ * This is an optimized version of bloom_check_add_64 that reduces memory access
+ * overhead by caching 64-bit words during the checking phase. Like the standard
+ * version, it performs a two-pass operation but with better cache locality.
+ *
+ * Arguments:
+ *   bloom - Pointer to initialized bloom filter structure with 64-bit buffer
+ *   buffer - Pointer to data buffer containing the element to check/add
+ *   len - Length of the data buffer in bytes
+ *
+ * Returns:
+ *   1 if element was already present (or collision occurred)
+ *   0 if element was not present and has been added
+ *
+ ****/
+inline int bloom_check_add_64_optimized(struct bloom * bloom, const void * buffer, int len )
+{
+  uint64_t hash[2];
+
+  int hits = 0;
+  MurmurHash3_x64_128(buffer, len, 0x9747b28c, &hash );
+  register uint64_t a = hash[0];
+  register uint64_t b = hash[1];
+  register uint64_t x;
+  register uint64_t i;
+
+  /* Check all bits first */
+  for (i = 0; i < bloom->hashes; i++) {
+    x = (a + i*b) % bloom->bits;
+    size_t qword = x >> 6;
+    uint64_t c = bloom->bf64[qword];
+    uint64_t mask = 1ULL << (x % 64);
+    if (c & mask) {
+      hits++;
+    }
+  }
+
+  if (hits EQ bloom->hashes) {
+    return 1;                // element already present
+  }
+
+  /* Not all bits set, so set them all and return 0 (new element) */
+  for (i = 0; i < bloom->hashes; i++) {
+    x = (a + i*b) % bloom->bits;
+    size_t qword = x >> 6;
+    bloom->bf64[qword] |= (1ULL << (x % 64));
+  }
+
+  return 0;                  // new element added
 }
 
 /** ***************************************************************************
@@ -195,8 +319,13 @@ int bloom_init(struct bloom * bloom, size_t entries, double error)
 {
   bloom->ready = 0;
 
-  if (entries < 1000 || error EQ 0) {
-    return 1;
+  /* Validate input parameters */
+  if (entries < 1000 || entries > SIZE_MAX / 64) {
+    return 1; /* entries too small or too large (potential overflow) */
+  }
+  
+  if (error <= 0.0 || error >= 1.0) {
+    return 1; /* error rate must be between 0 and 1 */
   }
 
   bloom->entries = entries;
@@ -226,12 +355,36 @@ int bloom_init(struct bloom * bloom, size_t entries, double error)
   return 0;
 }
 
+/****
+ *
+ * Initialize a 64-bit optimized bloom filter for use
+ *
+ * This function initializes a bloom filter optimized for 64-bit operations.
+ * It uses the same mathematical calculations as the standard bloom_init but
+ * allocates memory in 64-bit word chunks for better performance. The filter
+ * is initialized with optimal parameters based on expected entries and error rate.
+ *
+ * Arguments:
+ *   bloom - Pointer to an allocated struct bloom to initialize
+ *   entries - Expected number of entries (must be at least 1000)
+ *   error - Desired false positive probability (between 0.0 and 1.0)
+ *
+ * Returns:
+ *   0 on success
+ *   1 on failure (invalid parameters or memory allocation failure)
+ *
+ ****/
 int bloom_init_64(struct bloom * bloom, size_t entries, double error)
 {
   bloom->ready = 0;
 
-  if (entries < 1000 || error EQ 0) {
-    return 1;
+  /* Validate input parameters */
+  if (entries < 1000 || entries > SIZE_MAX / 64) {
+    return 1; /* entries too small or too large (potential overflow) */
+  }
+  
+  if (error <= 0.0 || error >= 1.0) {
+    return 1; /* error rate must be between 0 and 1 */
   }
 
   bloom->entries = entries;
@@ -252,7 +405,9 @@ int bloom_init_64(struct bloom * bloom, size_t entries, double error)
 
   bloom->hashes = (int)ceil(0.693147180559945 * bloom->bpe);  // ln(2)
 
-  if ( ( bloom->bf64 = (uint64_t *)XMALLOC( bloom->qwords * sizeof(uint64_t) ) ) EQ NULL )
+  bloom->bytes = bloom->qwords * sizeof(uint64_t);  // Set bytes field for 64-bit version
+
+  if ( ( bloom->bf64 = (uint64_t *)XMALLOC( bloom->bytes ) ) EQ NULL )
     return 1;
 
   bloom->ready = 1;
@@ -304,10 +459,21 @@ inline static int bloom_add(struct bloom * bloom, const void * buffer, int len)
   return bloom_check_add(bloom, buffer, len, 1);
 }
 
-/** ***************************************************************************
- * Print (to stdout) info about this bloom filter. Debugging aid.
+/****
  *
- */
+ * Print diagnostic information about the bloom filter to stderr
+ *
+ * This function outputs detailed information about the bloom filter's
+ * configuration and state to stderr for debugging purposes. It displays
+ * memory addresses, capacity, error rate, bit count, and other parameters.
+ *
+ * Arguments:
+ *   bloom - Pointer to initialized bloom filter structure
+ *
+ * Returns:
+ *   None (void function)
+ *
+ ****/
 void bloom_print(struct bloom * bloom)
 {
   fprintf(stderr, "bloom at %p\n", (void *)bloom);

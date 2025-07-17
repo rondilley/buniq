@@ -2,7 +2,7 @@
  *
  * Description: Hash Functions
  * 
- * Copyright (c) 2008-2019, Ron Dilley
+ * Copyright (c) 2008-2025, Ron Dilley
  * All rights reserved.
  *
  * This program is free software: you can redistribute it and/or modify
@@ -59,7 +59,17 @@ extern Config_t *config;
 
 /****
  *
- * calculate hash
+ * Calculates hash value for a given key string
+ *
+ * Computes hash value using a modified ELF hash algorithm. This function
+ * generates a hash index by processing each character in the key string.
+ *
+ * Arguments:
+ *   hashSize - Size of the hash table for modulo operation
+ *   keyString - Null-terminated string to hash
+ *
+ * Returns:
+ *   Hash index value (0 to hashSize-1)
  *
  ****/
 
@@ -93,7 +103,16 @@ uint32_t calcHash( uint32_t hashSize, const void *keyString ) {
 
 /****
  *
- * empty the hash table
+ * Frees all memory associated with a hash table
+ *
+ * Traverses the entire hash table and deallocates all hash records,
+ * key strings, and associated data. Also frees the hash table structure itself.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure to free
+ *
+ * Returns:
+ *   None (void function)
  *
  ****/
 
@@ -119,10 +138,19 @@ void freeHash( struct hash_s *hash ) {
 
 /****
  *
- * traverse all hash records, calling func() for each one
+ * Traverses all hash records and calls callback function for each
+ *
+ * Iterates through every hash record in the table and executes the
+ * provided callback function for each record. Stops if callback returns failure.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure
+ *   fn - Callback function to execute for each hash record
+ *
+ * Returns:
+ *   TRUE on success, FAILED if callback function returns failure
  *
  ****/
-
 
 int traverseHash( const struct hash_s *hash, int (*fn) (const struct hashRec_s *hashRec) ) {
   struct hashRec_s *curHashRec;
@@ -148,7 +176,20 @@ int traverseHash( const struct hash_s *hash, int (*fn) (const struct hashRec_s *
 
 /****
  *
- * add a record to the hash
+ * Adds a record to the hash table with pre-computed key
+ *
+ * Inserts a new hash record into the table at the specified key location.
+ * If collision occurs, the record is added to the end of the collision chain.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure
+ *   key - Pre-computed hash key value
+ *   keyString - String representation of the key
+ *   data - Pointer to data associated with this record
+ *   lastSeen - Timestamp when record was last accessed
+ *
+ * Returns:
+ *   TRUE on success, FAILED on memory allocation failure
  *
  ****/
 
@@ -221,7 +262,19 @@ int addHashRec( struct hash_s *hash, uint32_t key, char *keyString, void *data, 
 
 /****
  *
- * add a record to the hash
+ * Adds a unique record to the hash table with duplicate detection
+ *
+ * Inserts a new hash record while checking for duplicates and maintaining
+ * sorted order within collision chains. Rejects duplicate keys to ensure uniqueness.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure
+ *   keyString - Key string (may contain binary data)
+ *   keyLen - Length of the key string in bytes
+ *   data - Pointer to data associated with this record
+ *
+ * Returns:
+ *   TRUE on success, FAILED on duplicate key or memory allocation failure
  *
  ****/
 
@@ -465,7 +518,17 @@ int addUniqueHashRec( struct hash_s *hash, const char *keyString, int keyLen, vo
 
 /****
  *
- * initialize the hash
+ * Initializes a new hash table structure
+ *
+ * Creates and initializes a new hash table with the specified size.
+ * Selects an appropriate prime number for the hash size from the global
+ * primes array for optimal hash distribution.
+ *
+ * Arguments:
+ *   hashSize - Desired hash table size (0 for default)
+ *
+ * Returns:
+ *   Pointer to initialized hash table structure, NULL on failure
  *
  ****/
 
@@ -527,7 +590,17 @@ struct hash_s *initHash( uint32_t hashSize ) {
 
 /****
  *
- * find a hash
+ * Searches for a key in the hash table and returns its hash index
+ *
+ * Looks up a string key in the hash table and returns the hash index if found.
+ * Updates the lastSeen timestamp and access count for the found record.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure
+ *   keyString - Null-terminated string key to search for
+ *
+ * Returns:
+ *   Hash index if found, hash->size+1 if not found
  *
  ****/
 
@@ -580,7 +653,17 @@ uint32_t searchHash( struct hash_s *hash, const void *keyString ) {
 
 /****
  *
- * get hash record pointer
+ * Retrieves a hash record pointer for the specified key
+ *
+ * Searches the hash table for a record with the given key and returns
+ * a pointer to the hash record structure. Updates access statistics.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure
+ *   keyString - Null-terminated string key to search for
+ *
+ * Returns:
+ *   Pointer to hash record if found, NULL if not found
  *
  ****/
 
@@ -619,7 +702,19 @@ struct hashRec_s *getHashRecord( struct hash_s *hash, const void *keyString ) {
 
 /****
  *
- * snoop hash record pointer with precomputed key
+ * Looks up hash record without updating access statistics (with precomputed key)
+ *
+ * Searches for a hash record using a precomputed key without updating
+ * lastSeen timestamp or access count. Used for read-only lookups.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure
+ *   keyString - Key string (may contain binary data)
+ *   keyLen - Length of the key string in bytes
+ *   key - Precomputed hash key value
+ *
+ * Returns:
+ *   Pointer to hash record if found, NULL if not found
  *
  ****/
 
@@ -660,7 +755,18 @@ inline struct hashRec_s *snoopHashRecWithKey( struct hash_s *hash, const  char *
 
 /****
  *
- * snoop hash record pointer
+ * Looks up hash record without updating access statistics
+ *
+ * Searches for a hash record without updating lastSeen timestamp or
+ * access count. Computes hash key internally and performs binary comparison.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure
+ *   keyString - Key string (may contain binary data)
+ *   keyLen - Length of the key string in bytes (0 for strlen)
+ *
+ * Returns:
+ *   Pointer to hash record if found, NULL if not found
  *
  ****/
 
@@ -713,7 +819,17 @@ struct hashRec_s *snoopHashRecord( struct hash_s *hash, const  char *keyString, 
 
 /****
  *
- * get data in hash record
+ * Retrieves data associated with a hash record
+ *
+ * Searches for a hash record by key and returns the associated data pointer.
+ * This is a convenience function that combines key lookup with data retrieval.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure
+ *   keyString - Null-terminated string key to search for
+ *
+ * Returns:
+ *   Pointer to associated data if found, NULL if not found
  *
  ****/
 
@@ -723,6 +839,23 @@ void *getHashData( struct hash_s *hash, const void *keyString ) {
 
   return getDataByKey( hash, key, (void *)keyString );
 }
+
+/****
+ *
+ * Retrieves data using precomputed hash key
+ *
+ * Searches for a hash record using a precomputed key and returns the
+ * associated data pointer. Updates access statistics for the found record.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure
+ *   key - Precomputed hash key value
+ *   keyString - String key for comparison
+ *
+ * Returns:
+ *   Pointer to associated data if found, NULL if not found
+ *
+ ****/
 
 void *getDataByKey( struct hash_s *hash, uint32_t key, void *keyString ) {
   int depth = 0;
@@ -754,7 +887,16 @@ void *getDataByKey( struct hash_s *hash, uint32_t key, void *keyString ) {
 
 /****
  *
- * dump the hash
+ * Dumps hash table contents for debugging
+ *
+ * Traverses the entire hash table and counts all records.
+ * Currently only counts records without displaying them.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure
+ *
+ * Returns:
+ *   None (void function)
  *
  ****/
 
@@ -779,7 +921,17 @@ void dumpHash( struct hash_s *hash ) {
 
 /****
  *
- * grow the hash
+ * Grows hash table to specified size (placeholder function)
+ *
+ * Intended to resize the hash table to a larger size. Currently
+ * returns NULL as the function is not implemented.
+ *
+ * Arguments:
+ *   oldHash - Pointer to existing hash table
+ *   newHashSize - New desired hash table size
+ *
+ * Returns:
+ *   NULL (function not implemented)
  *
  ****/
 
@@ -789,7 +941,17 @@ struct hash_s *growHash( struct hash_s *oldHash, size_t newHashSize ) {
 
 /****
  *
- * shrink the hash
+ * Shrinks hash table to specified size (placeholder function)
+ *
+ * Intended to resize the hash table to a smaller size. Currently
+ * returns NULL as the function is not implemented.
+ *
+ * Arguments:
+ *   oldHash - Pointer to existing hash table
+ *   newHashSize - New desired hash table size
+ *
+ * Returns:
+ *   NULL (function not implemented)
  *
  ****/
 
@@ -799,7 +961,16 @@ struct hash_s *shrinkHash( struct hash_s *oldHash, size_t newHashSize ) {
 
 /****
  *
- * dynamic hash grow
+ * Dynamically grows hash table when load factor exceeds threshold
+ *
+ * Automatically resizes the hash table when the load factor exceeds 0.8.
+ * Creates a new larger hash table and rehashes all existing records.
+ *
+ * Arguments:
+ *   oldHash - Pointer to existing hash table
+ *
+ * Returns:
+ *   Pointer to new hash table if grown, original hash table otherwise
  *
  ****/
 
@@ -866,7 +1037,16 @@ struct hash_s *dyGrowHash( struct hash_s *oldHash ) {
 
 /****
  *
- * dynamic hash shring
+ * Dynamically shrinks hash table when load factor falls below threshold
+ *
+ * Automatically resizes the hash table when the load factor falls below 0.3.
+ * Creates a new smaller hash table and rehashes all existing records.
+ *
+ * Arguments:
+ *   oldHash - Pointer to existing hash table
+ *
+ * Returns:
+ *   Pointer to new hash table if shrunk, original hash table otherwise
  *
  ****/
 
@@ -906,11 +1086,19 @@ struct hash_s *dyShrinkHash( struct hash_s *oldHash ) {
 
 /****
  *
- * get an old record
+ * Purges old hash records based on age threshold
+ *
+ * Searches through the hash table and removes records older than the
+ * specified age. Returns data from the first old record found for cleanup.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure
+ *   age - Timestamp threshold for record removal
+ *
+ * Returns:
+ *   Pointer to data from removed record, NULL if no old records found
  *
  ****/
-
-/* XXX really inefficient, should generate a list of old records and return a linked list */
 
 void *purgeOldHashData( struct hash_s *hash, time_t age ) {
   int i;
@@ -955,11 +1143,18 @@ void *purgeOldHashData( struct hash_s *hash, time_t age ) {
 
 /****
  *
- * pop data out of hash
+ * Removes and returns data from first available hash record
+ *
+ * Searches through the hash table and removes the first record found,
+ * returning its associated data pointer for processing.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure
+ *
+ * Returns:
+ *   Pointer to data from removed record, NULL if no records found
  *
  ****/
-
-/* XXX inefficient, should generate a list of records to pop and return a linked list */
 
 void *popHash( struct hash_s *hash ) {
   int i;
@@ -997,7 +1192,19 @@ void *popHash( struct hash_s *hash ) {
 
 /****
  *
- * print key string in hex (just in case it is not ascii)
+ * Converts key string to hexadecimal representation
+ *
+ * Converts a key string (which may contain binary data) to a hexadecimal
+ * string representation for debugging and display purposes.
+ *
+ * Arguments:
+ *   keyString - Key string to convert (may contain binary data)
+ *   keyLen - Length of the key string in bytes
+ *   buf - Buffer to store hexadecimal output
+ *   bufLen - Size of the output buffer
+ *
+ * Returns:
+ *   Pointer to the output buffer containing hex string
  *
  ****/
 
@@ -1013,7 +1220,19 @@ char *hexConvert( const char *keyString, int keyLen, char *buf, const int bufLen
 
 /****
  *
- * print key string in hex (just in case it is not ascii)
+ * Converts UTF-16 key string to ASCII representation
+ *
+ * Converts a UTF-16 encoded key string to ASCII by taking every other byte.
+ * Used for handling Unicode key strings in hash operations.
+ *
+ * Arguments:
+ *   keyString - UTF-16 encoded key string to convert
+ *   keyLen - Length of the key string in bytes
+ *   buf - Buffer to store ASCII output
+ *   bufLen - Size of the output buffer
+ *
+ * Returns:
+ *   Pointer to the output buffer containing ASCII string
  *
  ****/
 
@@ -1031,7 +1250,16 @@ char *utfConvert( const char *keyString, int keyLen, char *buf, const int bufLen
 
 /****
  *
- * return size of hash
+ * Returns the size of the hash table
+ *
+ * Retrieves the current size (number of buckets) of the hash table.
+ * Returns failure code if hash table pointer is NULL.
+ *
+ * Arguments:
+ *   hash - Pointer to the hash table structure
+ *
+ * Returns:
+ *   Hash table size on success, FAILED if hash pointer is NULL
  *
  ****/
 

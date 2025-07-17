@@ -86,10 +86,24 @@
 	(ctx->block[(n)])
 #endif
 
-/*
- * This processes one or more 64-byte data blocks, but does NOT update
- * the bit counters.  There are no alignment requirements.
- */
+/****
+ *
+ * MD5 core transformation function that processes 64-byte data blocks
+ *
+ * This function implements the MD5 hash algorithm's core transformation
+ * for one or more 64-byte data blocks. It performs the four rounds of
+ * MD5 operations (F, G, H, I) on each block but does not update the
+ * bit counters. There are no alignment requirements for the input data.
+ *
+ * Arguments:
+ *   ctx - Pointer to MD5 context structure containing current hash state
+ *   data - Pointer to input data to be processed (must be multiple of 64 bytes)
+ *   size - Number of bytes to process (must be multiple of 64)
+ *
+ * Returns:
+ *   Pointer to the first unprocessed byte in the input data
+ *
+ ****/
 static const void *body(MD5_CTX *ctx, const void *data, unsigned long size)
 {
 	const unsigned char *ptr;
@@ -197,6 +211,21 @@ static const void *body(MD5_CTX *ctx, const void *data, unsigned long size)
 	return ptr;
 }
 
+/****
+ *
+ * Initialize MD5 hash computation context
+ *
+ * Initializes an MD5 context structure with the standard MD5 initial
+ * hash values and resets the bit counters. This function must be called
+ * before any MD5_Update() or MD5_Final() operations.
+ *
+ * Arguments:
+ *   ctx - Pointer to MD5 context structure to be initialized
+ *
+ * Returns:
+ *   None (void function)
+ *
+ ****/
 void MD5_Init(MD5_CTX *ctx)
 {
 	ctx->a = 0x67452301;
@@ -208,6 +237,24 @@ void MD5_Init(MD5_CTX *ctx)
 	ctx->hi = 0;
 }
 
+/****
+ *
+ * Update MD5 hash computation with new data
+ *
+ * Processes input data of arbitrary length by buffering it and calling
+ * the core MD5 transformation function when complete 64-byte blocks are
+ * available. Updates the bit counters to track the total amount of data
+ * processed. Can be called multiple times to process data incrementally.
+ *
+ * Arguments:
+ *   ctx - Pointer to MD5 context structure containing current hash state
+ *   data - Pointer to input data to be added to the hash computation
+ *   size - Number of bytes of input data to process
+ *
+ * Returns:
+ *   None (void function)
+ *
+ ****/
 void MD5_Update(MD5_CTX *ctx, const void *data, unsigned long size)
 {
 	MD5_u32plus saved_lo;
@@ -242,6 +289,23 @@ void MD5_Update(MD5_CTX *ctx, const void *data, unsigned long size)
 	memcpy(ctx->buffer, data, size);
 }
 
+/****
+ *
+ * Finalize MD5 hash computation and produce final digest
+ *
+ * Completes the MD5 hash computation by applying padding, appending
+ * the bit length, and performing the final transformation. Extracts
+ * the 128-bit hash value into the result buffer in little-endian
+ * byte order. Clears the context structure for security.
+ *
+ * Arguments:
+ *   result - Pointer to 16-byte buffer to receive the final MD5 hash digest
+ *   ctx - Pointer to MD5 context structure containing current hash state
+ *
+ * Returns:
+ *   None (void function)
+ *
+ ****/
 void MD5_Final(unsigned char *result, MD5_CTX *ctx)
 {
 	unsigned long used, available;
