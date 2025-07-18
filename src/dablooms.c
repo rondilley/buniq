@@ -1,6 +1,8 @@
 /* Copyright @2012 by Justin Hines at Bitly under a very liberal license. See LICENSE in the source distribution. */
 
 #define _GNU_SOURCE
+#define _FILE_OFFSET_BITS 64
+#define _LARGEFILE64_SOURCE
 #include <sys/stat.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -91,8 +93,33 @@ bitmap_t *bitmap_resize(bitmap_t *bitmap, size_t old_size, size_t new_size)
     
     /* grow file if necessary */
     if (size < new_size) {
-        if (ftruncate(fd, new_size) < 0) {
-            perror("Error increasing file size with ftruncate");
+        /* Check if fd is valid */
+        if (fd < 0) {
+            fprintf(stderr, "Error: Invalid file descriptor %d\n", fd);
+            free_bitmap(bitmap);
+            return NULL;
+        }
+        
+        /* Log large allocations for debugging */
+        if (new_size > (size_t)(1L * 1024 * 1024 * 1024)) { /* > 1GB */
+            fprintf(stderr, "INFO: Resizing bitmap to %zu bytes (%.2f GB)\n", 
+                    new_size, (double)new_size / (1024.0 * 1024.0 * 1024.0));
+        }
+        
+        /* Use 64-bit file operations for large files */
+#ifdef __linux__
+        if (ftruncate64(fd, (off64_t)new_size) < 0) {
+#else
+        if (ftruncate(fd, (off_t)new_size) < 0) {
+#endif
+            fprintf(stderr, "Error increasing file size with ftruncate (fd=%d, old_size=%zu, new_size=%zu): %s\n", 
+                    fd, size, new_size, strerror(errno));
+            /* Check specific error conditions */
+            if (errno == EFBIG) {
+                fprintf(stderr, "File size limit exceeded. Try setting TMPDIR to a filesystem with large file support.\n");
+            } else if (errno == ENOSPC) {
+                fprintf(stderr, "Not enough disk space for bloom filter temporary file.\n");
+            }
             free_bitmap(bitmap);
             close(fd);
             return NULL;
@@ -430,7 +457,12 @@ counting_bloom_t *new_counting_bloom(unsigned int capacity, double error_rate, c
     counting_bloom_t *cur_bloom;
     int fd;
     
+    /* Open with large file support */
+#ifdef __linux__
+    if ((fd = open(filename, O_RDWR | O_CREAT | O_TRUNC | O_LARGEFILE, (mode_t)0600)) < 0) {
+#else
     if ((fd = open(filename, O_RDWR | O_CREAT | O_TRUNC, (mode_t)0600)) < 0) {
+#endif
         perror("Error, Opening File Failed");
         fprintf(stderr, " %s \n", filename);
         return NULL;
@@ -598,15 +630,25 @@ counting_bloom_t *new_counting_bloom_from_scale(scaling_bloom_t *bloom)
     
     error_rate = bloom->error_rate * (pow(ERROR_TIGHTENING_RATIO, bloom->num_blooms + 1));
     
-    if ((bloom->blooms = realloc(bloom->blooms, (bloom->num_blooms + 1) * sizeof(counting_bloom_t *))) == NULL) {
+    counting_bloom_t **new_blooms = realloc(bloom->blooms, (bloom->num_blooms + 1) * sizeof(counting_bloom_t *));
+    if (new_blooms == NULL) {
         fprintf(stderr, "Error, could not realloc a new bloom filter\n");
         return NULL;
     }
+    bloom->blooms = new_blooms;
     
     cur_bloom = counting_bloom_init(bloom->capacity, error_rate, bloom->num_bytes);
+    if (cur_bloom == NULL) {
+        fprintf(stderr, "Error, could not initialize counting bloom filter\n");
+        return NULL;
+    }
     bloom->blooms[bloom->num_blooms] = cur_bloom;
     
     bloom->bitmap = bitmap_resize(bloom->bitmap, bloom->num_bytes, bloom->num_bytes + cur_bloom->num_bytes);
+    if (bloom->bitmap == NULL) {
+        fprintf(stderr, "Error, could not resize bitmap\n");
+        return NULL;
+    }
     
     /* reset header pointer, as mmap may have moved */
     bloom->header = (scaling_bloom_header_t *) bloom->bitmap->array;
@@ -648,7 +690,12 @@ counting_bloom_t *new_counting_bloom_from_file(unsigned int capacity, double err
     
     counting_bloom_t *bloom;
     
+    /* Open with large file support */
+#ifdef __linux__
+    if ((fd = open(filename, O_RDWR | O_LARGEFILE, (mode_t)0600)) < 0) {
+#else
     if ((fd = open(filename, O_RDWR, (mode_t)0600)) < 0) {
+#endif
         fprintf(stderr, "Error, Could not open file %s: %s\n", filename, strerror(errno));
         return NULL;
     }
@@ -744,6 +791,10 @@ int scaling_bloom_add(scaling_bloom_t *bloom, const char *s, size_t len, uint64_
     
     if ((id > bloom->header->max_id) && (cur_bloom->header->count >= cur_bloom->capacity - 1)) {
         cur_bloom = new_counting_bloom_from_scale(bloom);
+        if (cur_bloom == NULL) {
+            fprintf(stderr, "Error, could not create new counting bloom from scale\n");
+            return -1; /* Error creating new bloom filter */
+        }
         cur_bloom->header->count = 0;
         cur_bloom->header->id = bloom->header->max_id + 1;
     }
@@ -871,6 +922,10 @@ int scaling_bloom_check_add(scaling_bloom_t *bloom, const char *s, size_t len, u
     
     if ((id > bloom->header->max_id) && (cur_bloom->header->count >= cur_bloom->capacity - 1)) {
         cur_bloom = new_counting_bloom_from_scale(bloom);
+        if (cur_bloom == NULL) {
+            fprintf(stderr, "Error, could not create new counting bloom from scale\n");
+            return -1; /* Error creating new bloom filter */
+        }
         cur_bloom->header->count = 0;
         cur_bloom->header->id = bloom->header->max_id + 1;
     }
@@ -1018,7 +1073,12 @@ scaling_bloom_t *new_scaling_bloom(unsigned int capacity, double error_rate, con
     counting_bloom_t *cur_bloom;
     int fd;
     
+    /* Open with large file support */
+#ifdef __linux__
+    if ((fd = open(filename, O_RDWR | O_CREAT | O_TRUNC | O_LARGEFILE, (mode_t)0600)) < 0) {
+#else
     if ((fd = open(filename, O_RDWR | O_CREAT | O_TRUNC, (mode_t)0600)) < 0) {
+#endif
         perror("Error, Opening File Failed");
         fprintf(stderr, " %s \n", filename);
         return NULL;
@@ -1063,7 +1123,12 @@ scaling_bloom_t *new_scaling_bloom_from_file(unsigned int capacity, double error
     scaling_bloom_t *bloom;
     counting_bloom_t *cur_bloom;
     
+    /* Open with large file support */
+#ifdef __linux__
+    if ((fd = open(filename, O_RDWR | O_LARGEFILE, (mode_t)0600)) < 0) {
+#else
     if ((fd = open(filename, O_RDWR, (mode_t)0600)) < 0) {
+#endif
         fprintf(stderr, "Error, Could not open file %s: %s\n", filename, strerror(errno));
         return NULL;
     }

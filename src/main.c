@@ -540,7 +540,9 @@ int processFile( const char *fName ) {
 
   /* Check if we're reading from stdin or if file is very large */
   if ( strcmp( fName, "-" ) EQ 0 ) {
-    use_scaling = TRUE;
+    /* For stdin, use regular bloom filter with large capacity instead of scaling */
+    /* Scaling bloom filter becomes impractical for very large datasets (>10M items) */
+    use_scaling = FALSE;
     inFile = stdin;
   } else {
     /* Security validation for file path */
@@ -590,10 +592,23 @@ int processFile( const char *fName ) {
 
   if ( use_scaling ) {
     /* Create secure temporary file for scaling bloom filter */
-    char tmpfile_template[] = "/tmp/buniq-XXXXXX";
+    /* Try to use current directory first, fall back to /tmp if needed */
+    char tmpfile_template[PATH_MAX];
+    const char *tmpdir = getenv("TMPDIR");
+    if (tmpdir == NULL) {
+      /* Try current directory first for large files */
+      if (access(".", W_OK) == 0) {
+        snprintf(tmpfile_template, sizeof(tmpfile_template), "./buniq-XXXXXX");
+      } else {
+        snprintf(tmpfile_template, sizeof(tmpfile_template), "/tmp/buniq-XXXXXX");
+      }
+    } else {
+      snprintf(tmpfile_template, sizeof(tmpfile_template), "%s/buniq-XXXXXX", tmpdir);
+    }
+    
     int tmpfd = mkstemp( tmpfile_template );
     if ( tmpfd == -1 ) {
-      fprintf( stderr, "ERR - Unable to create secure temporary file\n" );
+      fprintf( stderr, "ERR - Unable to create secure temporary file in %s\n", tmpfile_template );
       if ( inFile != stdin ) fclose( inFile );
       return FAILED;
     }
@@ -602,7 +617,11 @@ int processFile( const char *fName ) {
     tmpfile[sizeof(tmpfile) - 1] = '\0';
     
     /* Initialize scaling bloom filter with initial capacity */
-    sbf = new_scaling_bloom( 1000000, config->eRate, tmpfile );
+    /* For stdin, use a larger initial capacity to reduce scaling needs */
+    unsigned int initial_capacity = ( strcmp( fName, "-" ) == 0 ) ? 10000000 : 1000000;
+    /* For very large datasets from stdin, use a higher error rate to reduce memory */
+    double effective_error_rate = ( strcmp( fName, "-" ) == 0 && config->eRate < 0.1 ) ? 0.1 : config->eRate;
+    sbf = new_scaling_bloom( initial_capacity, effective_error_rate, tmpfile );
     if ( sbf == NULL ) {
       fprintf( stderr, "ERR - Unable to initialize scaling bloom filter\n" );
       if ( inFile != stdin ) fclose( inFile );
@@ -610,7 +629,7 @@ int processFile( const char *fName ) {
     }
     
     if ( config->debug > 0 ) {
-      fprintf( stderr, "Using scaling bloom filter with error rate %.4f\n", config->eRate );
+      fprintf( stderr, "Using scaling bloom filter with error rate %.4f (effective: %.4f)\n", config->eRate, effective_error_rate );
     }
     
     /* For larger files, use optimized buffered reading */
@@ -635,8 +654,38 @@ int processFile( const char *fName ) {
     while ( fgets( rBuf, sizeof( rBuf ), inFile ) != NULL ) {
       line_count++;
       size_t line_len = strlen( rBuf );
+      
+      /* Check for null pointer */
+      if ( sbf == NULL ) {
+        fprintf( stderr, "ERR - Scaling bloom filter is NULL at line %lu\n", line_count );
+        if ( inFile != stdin ) fclose( inFile );
+        return FAILED;
+      }
+      
+      /* Check if line was truncated (no newline at end of buffer) */
+      if ( line_len == sizeof(rBuf) - 1 && rBuf[line_len - 1] != '\n' ) {
+        /* Line was truncated, skip rest of line */
+        int ch;
+        while ( (ch = fgetc(inFile)) != '\n' && ch != EOF ) {
+          /* Skip rest of line */
+        }
+        if ( config->debug > 0 ) {
+          fprintf( stderr, "WARN - Line %lu truncated at %zu bytes\n", line_count, line_len );
+        }
+      }
+      
       /* Combined check and add to avoid duplicate hash computation */
-      if ( scaling_bloom_check_add( sbf, rBuf, line_len, line_count ) == 0 ) {
+      int result = scaling_bloom_check_add( sbf, rBuf, line_len, line_count );
+      if ( result == -1 ) {
+        fprintf( stderr, "ERR - Failed to add item to scaling bloom filter at line %lu\n", line_count );
+        if ( readBuf != NULL ) {
+          XFREE( readBuf );
+        }
+        free_scaling_bloom( sbf );
+        unlink( tmpfile );
+        if ( inFile != stdin ) fclose( inFile );
+        return FAILED;
+      } else if ( result == 0 ) {
         /* This is a new unique line, print it */
         printf( "%s", rBuf );
       }
@@ -650,18 +699,35 @@ int processFile( const char *fName ) {
     unlink( tmpfile );
     
   } else {
-    /* Use regular bloom filter for smaller files */
+    /* Use regular bloom filter for files and stdin */
     
-    /* Estimate lines based on average line length of 20 chars (more realistic) */
-    /* Add 50% buffer for safety */
-    size_t estimated_lines = ((fSize / 20) * 3) / 2;
+    size_t estimated_lines;
+    double effective_error_rate;
     
-    /* Ensure reasonable bounds */
-    if (estimated_lines < 1000) estimated_lines = 1000;
-    if (estimated_lines > 10000000) estimated_lines = 10000000;
+    if ( strcmp( fName, "-" ) == 0 ) {
+      /* For stdin, estimate based on typical password list sizes */
+      /* Use larger capacity to handle big password lists */
+      estimated_lines = 50000000; /* 50M entries */
+      /* Use higher error rate to keep memory reasonable */
+      effective_error_rate = (config->eRate < 0.01) ? 0.01 : config->eRate;
+      if ( config->debug > 0 ) {
+        fprintf( stderr, "stdin: Using regular bloom filter with capacity %zu, error rate %.4f\n", 
+                estimated_lines, effective_error_rate );
+      }
+    } else {
+      /* Estimate lines based on file size with average line length of 20 chars */
+      /* Add 50% buffer for safety */
+      estimated_lines = ((fSize / 20) * 3) / 2;
+      
+      /* Ensure reasonable bounds */
+      if (estimated_lines < 1000) estimated_lines = 1000;
+      if (estimated_lines > 10000000) estimated_lines = 10000000;
+      
+      effective_error_rate = config->eRate;
+    }
     
     /* init bloom filter */
-    if ( bloom_init_64( &bf, estimated_lines, config->eRate ) != 0 ) {
+    if ( bloom_init_64( &bf, estimated_lines, effective_error_rate ) != 0 ) {
       fprintf( stderr, "ERR - Unable to initialize bloom filter\n" );
       if ( inFile != stdin ) fclose( inFile );
       return FAILED;
@@ -674,6 +740,19 @@ int processFile( const char *fName ) {
     /* Process lines with regular bloom filter */
     while ( fgets( rBuf, sizeof( rBuf ), inFile ) != NULL ) {
       size_t line_len = strlen( rBuf );
+      
+      /* Check if line was truncated (no newline at end of buffer) */
+      if ( line_len == sizeof(rBuf) - 1 && rBuf[line_len - 1] != '\n' ) {
+        /* Line was truncated, skip rest of line */
+        int ch;
+        while ( (ch = fgetc(inFile)) != '\n' && ch != EOF ) {
+          /* Skip rest of line */
+        }
+        if ( config->debug > 0 ) {
+          fprintf( stderr, "WARN - Line truncated at %zu bytes\n", line_len );
+        }
+      }
+      
       /* Use original check-and-add function (fixed bit shift) */
       if ( bloom_check_add_64( &bf, rBuf, line_len ) == 0 ) {
         /* This is a new unique line, print it */

@@ -4,26 +4,58 @@ by Ron Dilley <ron.dilley@uberadmin.com>
 
 You can find the latest information on wirespy [here](http://www.uberadmin.com/Projects/buniq/ "Bloomfilter Unique")
 
-## What is WireSpy (wsd)?
+## What is Bloomfilter Unique (buniq)?
 
-Wirespy is a simple network sniffer for information security that extracts
-interesting metadata about network traffic and logs it.  That sounds like
-a million other security and network tools, and it is in many ways though
-there are some very important differences.
+Bloomfilter Unique is a simple tool for removing duplicate lines from a
+text file.  By using bloom filters, the process of removing duplicates
+benifits from their space-efficient probabilistic data structure.  In
+short, it's a fast and efficient way to remove duplicates from very large
+files.
 
 ## Why use it?
 
-Wirespy is not a replacement for tcpdump, wireshark or any of the other
-network sniffers.  It has a specific purpose in providing long term
-metadata about network traffic including TCP flow logging.  It is efficent
-and can monitoring live network traffic or process PCAP files.
+I built this tool to address a problem I was having removing
+duplicate password from very large dictionaries that just keep
+growing and growing based on new published datasets along with
+more and more cracked hashes.
 
-I use it on my network recorders to extract metadata from the PCAP files
-that takes up less space, further extended the number of months of network
-intelligence I can save before running out of disk space.
+My base disctionaries are over 5gb now and removing duplicates
+was getting closer and closer to the 1h mark to complete.  Using
+sort and uniq with large source files uses lots of IO and memory.
 
-The TCP flow capability is tollerant of lost packets which are common
-when passively monitoring network traffic.
+| size | filename |
+| ---- | -------- |
+| 1.1G | guessed.lst |
+| 3.3G | master.lst |
+| 1.0G | mega.lst |
+
+The sad reality is that sort | uniq takes almost 40 minutes to
+process and remove the duplicates.
+
+```sh
+time cat guessed.lst master.lst mega.lst | sort | uniq > test.lst
+
+real	37m50.684s
+user	46m40.996s
+sys	0m44.241s
+```
+
+Bloom filters are space-efficient and the error rate is configurable.
+Misses are always accurate, hit rate accuracy is based on the selected
+error rate value.  I don't need the unique process to be perfect for
+passwords, and the difference in performance is striking.  Same files,
+buniq completed the process in 3 1/2 minutes instead of 40.
+
+```sh
+time cat guessed.lst master.lst mega.lst | buniq - > test1.lst
+
+real	3m26.142s
+user	3m16.268s
+sys	0m14.993s
+```
+
+I am sure there all kinds of other placeses where buniq can help as
+a replacement for "sort | uniq".
 
 ## Implementation
 
@@ -57,7 +89,7 @@ Advanced Options:
  -a|--adaptive        use adaptive bloom filter sizing
 
 Examples:
-  buniq input.txt                    # Remove duplicates from file
+  buniq input.txt                   # Remove duplicates from file
   cat file | buniq                  # Remove duplicates from stdin
   buniq -e 0.001 large.txt          # Use lower error rate for better accuracy
   buniq -j 4 -s large.txt           # Use 4 threads and show statistics
