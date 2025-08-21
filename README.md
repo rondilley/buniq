@@ -2,7 +2,7 @@
 
 by Ron Dilley <ron.dilley@uberadmin.com>
 
-You can find the latest information on wirespy [here](http://www.uberadmin.com/Projects/buniq/ "Bloomfilter Unique")
+You can find the latest information on buniq [here](http://www.uberadmin.com/Projects/buniq/ "Bloomfilter Unique")
 
 ## What is Bloomfilter Unique (buniq)?
 
