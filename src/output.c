@@ -412,7 +412,7 @@ void output_json_start(void) {
  *   None (void function)
  *
  ****/
-void output_json_line(const char *line, int count, int is_last) {
+void output_json_line(const char *line, int count __attribute__((unused)), int is_last __attribute__((unused))) {
   static int first_line = 1;
   
   if (!first_line) {
@@ -493,7 +493,7 @@ void output_csv_header(void) {
  *   None (void function)
  *
  ****/
-void output_csv_line(const char *line, int count, int line_num) {
+void output_csv_line(const char *line, int count __attribute__((unused)), int line_num __attribute__((unused))) {
   char *escaped = escape_csv_string(line);
   
   printf("\"%s\"\n", escaped);

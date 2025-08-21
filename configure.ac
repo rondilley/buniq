@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script
 AC_PREREQ([2.69])
-m4_define([BUNIQ_VERSION], [0.4])
+m4_define([BUNIQ_VERSION], [0.5])
 AC_INIT([Bloom Filter Unique], BUNIQ_VERSION, [ron.dilley@uberadmin.com], [buniq], [http://www.uberadmin.com/Projects/buniq/])
 AC_CONFIG_SRCDIR(src/main.c)
 AC_CONFIG_AUX_DIR(config)

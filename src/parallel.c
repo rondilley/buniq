@@ -137,7 +137,7 @@ void destroy_thread_pool(thread_pool_t *pool) {
  *   0 on success, -1 if pool is shutting down
  *
  ****/
-int submit_work(thread_pool_t *pool, const char *line, int line_len, int line_num) {
+int submit_work(thread_pool_t *pool, const char *line, int line_len __attribute__((unused)), int line_num __attribute__((unused))) {
   pthread_mutex_lock(&pool->queue_mutex);
   
   /* Wait for space in queue */

@@ -178,7 +178,7 @@ int is_dir_safe( const char *dir ) {
  *
  ****/
 
-int display( int level, char *format, ... ) {
+int display( int level, const char *format, ... ) {
   PRIVATE va_list args;
   PRIVATE char tmp_buf[SYSLOG_MAX];
   PRIVATE int i;
@@ -233,6 +233,7 @@ int display( int level, char *format, ... ) {
  *
  ****/
 
+#if 0 /* Currently unused - kept for potential future use */
 static int safe_open( const char *filename ) {
   int fd;
   struct stat sb;
@@ -255,6 +256,7 @@ static int safe_open( const char *filename ) {
 
   return (fd);
 }
+#endif
 
 /****
  *
@@ -272,11 +274,13 @@ static int safe_open( const char *filename ) {
  *
  ****/
 
+#if 0 /* Currently unused - kept for potential future use */
 static void cleanup_pid_file( const char *filename ) {
   if ( strlen( filename ) > 0 ) {
     unlink( filename );
   }
 }
+#endif
 
 /****
  *

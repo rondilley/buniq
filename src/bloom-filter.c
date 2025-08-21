@@ -44,7 +44,6 @@
  *
  ****/
 
-extern int errno;
 extern char **environ;
 extern int quit;
 extern int reload;
@@ -82,15 +81,15 @@ extern Config_t *config;
  ****/
 inline static int test_bit_set_bit(unsigned char * buf, size_t x, int set_bit)
 {
-  size_t byte = x >> 3;
-  unsigned char c = buf[byte];        // expensive memory access
+  size_t byte_offset = x >> 3;
+  unsigned char c = buf[byte_offset];        // expensive memory access
   unsigned int mask = 1 << (x % 8);
 
   if (c & mask) {
     return 1;
   } else {
     if (set_bit) {
-      buf[byte] = c | mask;
+      buf[byte_offset] = c | mask;
     }
     return 0;
   }

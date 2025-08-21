@@ -63,7 +63,7 @@ buniq comes with a minimal set of options as follows:
 
 ```sh
 % ./buniq -h
-buniq v0.4 [Jul 17 2025 - 00:23:16]
+buniq v0.5 [Aug 21 2025]
 
 syntax: buniq [options] [file]
 
@@ -98,16 +98,17 @@ Examples:
   buniq -b scaling -a input.txt     # Use adaptive scaling bloom filter
 ```
 
-## Security Implications
+## Security Features
 
-Assume that there are errors in the wsd source that
-would allow a specially crafted packet to allow an attacker
-to exploit wsd to gain access to the computer that wsd is
-running on!!!  wsd tries to get rid of priviledges it does
-not need and can run in a chroot environment.  I recommend
-that you use the chroot and uid/gid options.  They are there
-to compensate for my poor programming skills.  Don't trust
-this software and install and use is at your own risk.
+buniq includes several security hardening features:
+
+- **Path validation**: Prevents directory traversal attacks and validates file paths
+- **Secure memory handling**: Uses secure memory allocation/deallocation functions
+- **Buffer overflow protection**: Implements secure string copying with bounds checking
+- **Input validation**: Validates filenames and file types before processing
+- **Privilege dropping**: Can drop elevated privileges when running as root
+
+The program performs input validation and uses secure coding practices to minimize security vulnerabilities.
 
 ## Bugs
 

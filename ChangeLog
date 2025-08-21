@@ -10,3 +10,12 @@
 
 	* Minor security enhancements
 	* Added scaling bloom for stream input
+
+2025-08-21  Ron Dilley <ron.dilley@uberadmin.com>
+
+	* v0.5 released with code cleanup and optimization
+	* Removed unused code modules (hash.c/h, md5.c/h, buniq.c/h)
+	* Removed security audit logging system that generated AUDIT events
+	* Fixed multiple compiler warnings (unused variables, const qualifiers)
+	* Streamlined build system and reduced compilation artifacts
+	* Improved code maintainability by eliminating dead code paths

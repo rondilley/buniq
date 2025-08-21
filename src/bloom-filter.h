@@ -48,8 +48,6 @@
 #include "util.h"
 #include "mem.h"
 #include "getopt.h"
-#include "hash.h"
-#include "md5.h"
 #include "murmur.h"
 
 /****
@@ -99,11 +97,8 @@ struct bloom
 
 int bloom_init(struct bloom * bloom, size_t entries, double error);
 int bloom_init_64(struct bloom * bloom, size_t entries, double error);
-static int bloom_check(struct bloom * bloom, const void * buffer, int len);
-static int bloom_check_add(struct bloom * bloom, const void * buffer, int len, int add);
 int bloom_check_add_64(struct bloom * bloom, const void * buffer, int len );
 int bloom_check_add_64_optimized(struct bloom * bloom, const void * buffer, int len );
-static int bloom_add(struct bloom * bloom, const void * buffer, int len);
 void bloom_print(struct bloom * bloom);
 void bloom_free(struct bloom * bloom);
 int bloom_reset(struct bloom * bloom);

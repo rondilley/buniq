@@ -1,11 +1,18 @@
-psort TODO list
-==============
+buniq TODO list
+===============
 
 Short-term:
 -----------
-* stuff
+* Performance optimization of bloom filter operations
+* Memory usage optimization for very large datasets
+* Improved error handling and user feedback
+* Better progress indication for long-running operations
 
 Long-term:
 ----------
-* complicated stuff
+* Multi-threaded bloom filter processing
+* Support for custom hash functions
+* Bloom filter persistence/loading for reuse across runs
+* Advanced statistics and analysis features
+* Integration with other deduplication workflows
 

@@ -75,8 +75,6 @@
 #include "util.h"
 #include "mem.h"
 #include "getopt.h"
-#include "hash.h"
-#include "md5.h"
 #include "bloom-filter.h"
 #include "dablooms.h"
 #include "parallel.h"
@@ -102,10 +100,7 @@
  ****/
 
 int main(int argc, char *argv[]);
-PRIVATE void cleanup( void );
-PRIVATE void show_info( void );
-PRIVATE void print_version( void );
-PRIVATE void print_help( void );
+void show_info( void );
 int processFile( const char *fName );
 
 #endif /* MAIN_DOT_H */

@@ -322,7 +322,7 @@ void *xmemcpy_( void *d_ptr, void *s_ptr, const size_t size, const char *filenam
  *
  ****/
 
-char *xmemncpy_( char *d_ptr, const char *s_ptr, const size_t len, const int size, const char *filename, const int linenumber ) {
+char *xmemncpy_( char *d_ptr, const char *s_ptr, const size_t len __attribute__((unused)), const int size, const char *filename, const int linenumber ) {
   char *result;
 #ifdef MEM_DEBUG
   PRIVATE struct Mem_s *mem_ptr;
@@ -483,9 +483,11 @@ void *xmemset_( void *ptr, const char value, const size_t size, const char *file
 
 void *xrealloc_( void *ptr, size_t size, const char *filename, const int linenumber) {
   void *result;
+#ifdef MEM_DEBUG
   size_t current_size;
   int found = FALSE;
   struct Mem_s *mem_ptr;
+#endif
   
   if ( ptr EQ NULL ) {
     fprintf( stderr, "realloc() called with NULL ptr at %s:%d\n", filename, linenumber );
@@ -684,7 +686,7 @@ void xfree_all_( const char *filename, const int linenumber ) {
  *
  ****/
 
-char *xstrdup_( const char *str, const char *filename, const int linenumber ) {
+char *xstrdup_( const char *str, const char *filename __attribute__((unused)), const int linenumber __attribute__((unused)) ) {
   char *res;
 
   res = strdup( str );

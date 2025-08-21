@@ -37,6 +37,16 @@
 
 /****
  *
+ * function prototypes
+ *
+ ****/
+
+PRIVATE void cleanup( void );
+PRIVATE void print_version( void );
+PRIVATE void print_help( void );
+
+/****
+ *
  * global variables
  *
  ****/
@@ -59,7 +69,6 @@ struct hash_s *lineHash = NULL;
  *
  ****/
 
-extern int errno;
 extern char **environ;
 
 /****
@@ -67,7 +76,7 @@ extern char **environ;
  * Main entry point for the buniq program
  *
  * Initializes the program configuration, parses command line arguments,
- * sets up security audit system, and processes input files to remove
+ * and processes input files to remove
  * duplicate lines using bloom filters.
  *
  * Arguments:
@@ -81,21 +90,11 @@ extern char **environ;
  ****/
 
 int main(int argc, char *argv[]) {
-  PRIVATE int pid = 0;
-  PRIVATE int c = 0, i = 0, fds = 0, status = 0;
-  int digit_optind = 0;
+  PRIVATE int c = 0;
   PRIVATE struct passwd *pwd_ent;
-  PRIVATE struct group *grp_ent;
-  PRIVATE char **ptr;
   char *tmp_ptr = NULL;
-  char *pid_file = NULL;
   char *home_dir = NULL;
-  char *chroot_dir = NULL;
-  char *user = NULL;
-  char *group = NULL;
 
-  /* Initialize security audit system */
-  security_audit_init();
   
   /* setup config */
   config = ( Config_t * )XMALLOC( sizeof( Config_t ) );
@@ -139,7 +138,6 @@ int main(int argc, char *argv[]) {
   config->uid = getuid();
 
   while (1) {
-    int this_option_optind = optind ? optind : 1;
 #ifdef HAVE_GETOPT_LONG
     int option_index = 0;
     static struct option long_options[] = {
@@ -347,7 +345,6 @@ int main(int argc, char *argv[]) {
 
   /* Security cleanup */
   secure_cleanup_temp_files();
-  security_audit_cleanup();
 
   cleanup();
 
@@ -489,7 +486,6 @@ PRIVATE void print_help( void ) {
  ****/
 
 PRIVATE void cleanup( void ) {
-  int i, j;
 
   XFREE( config->hostname );
   
@@ -548,7 +544,6 @@ int processFile( const char *fName ) {
     /* Security validation for file path */
     if ( secure_validate_path( fName ) != 0 ) {
       fprintf( stderr, "ERR - Invalid or unsafe file path\n" );
-      security_audit_log("FILE_PATH_VALIDATION_FAILED", fName);
       return FAILED;
     }
     
@@ -561,14 +556,12 @@ int processFile( const char *fName ) {
     /* Basic security check - don't process special files */
     if ( !S_ISREG( fStatBuf.st_mode ) ) {
       fprintf( stderr, "ERR - Input must be a regular file\n" );
-      security_audit_log("FILE_TYPE_VALIDATION_FAILED", fName);
       return FAILED;
     }
     
     /* Check file size limits */
     if ( fStatBuf.st_size > (1024 * 1024 * 1024) ) { /* 1GB limit */
       fprintf( stderr, "ERR - File too large (>1GB)\n" );
-      security_audit_log("FILE_SIZE_LIMIT_EXCEEDED", fName);
       return FAILED;
     }
     

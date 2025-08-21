@@ -10,3 +10,13 @@ Version 0.4 (Jul 17, 2025):
 
 * Minor security enhancements
 * Added scaling bloom for stream input
+
+Version 0.5 (Aug 21, 2025):
+
+* Major code cleanup and optimization release
+* Removed unused code modules (hash.c/h, md5.c/h, buniq.c/h) that contained no active functions
+* Eliminated security audit logging system - no more AUDIT events generated during program execution
+* Fixed numerous compiler warnings for cleaner builds
+* Reduced build artifacts and improved compilation speed
+* Enhanced code maintainability by removing dead code paths
+* Streamlined codebase now focuses purely on bloom filter duplicate detection

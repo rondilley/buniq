@@ -31,8 +31,6 @@ static uid_t original_uid = 0;
 static gid_t original_gid = 0;
 static int privileges_dropped = 0;
 
-/* Audit log file */
-static FILE *audit_log = NULL;
 
 /****
  *
@@ -67,7 +65,6 @@ int secure_open(const char *pathname, int flags, mode_t mode) {
     
     int fd = open(pathname, flags, mode);
     if (fd >= 0) {
-        security_audit_log("FILE_OPEN", pathname);
     }
     
     return fd;
@@ -106,7 +103,6 @@ FILE *secure_fopen(const char *pathname, const char *mode) {
     
     FILE *fp = fopen(pathname, mode);
     if (fp) {
-        security_audit_log("FILE_FOPEN", pathname);
     }
     
     return fp;
@@ -335,7 +331,6 @@ void *secure_malloc(size_t size) {
     if (ptr) {
         /* Initialize memory to zero */
         memset(ptr, 0, size);
-        security_audit_log("MALLOC", "Memory allocated");
     }
     
     return ptr;
@@ -368,7 +363,6 @@ void *secure_calloc(size_t nmemb, size_t size) {
     
     void *ptr = calloc(nmemb, size);
     if (ptr) {
-        security_audit_log("CALLOC", "Memory allocated");
     }
     
     return ptr;
@@ -402,7 +396,6 @@ void *secure_realloc(void *ptr, size_t size) {
     
     void *new_ptr = realloc(ptr, size);
     if (new_ptr) {
-        security_audit_log("REALLOC", "Memory reallocated");
     }
     
     return new_ptr;
@@ -488,80 +481,8 @@ int secure_random_bytes(unsigned char *buf, size_t len) {
     return 0;
 }
 
-/****
- *
- * Initialize the security audit logging system
- *
- * Sets up audit logging to file or stderr fallback,
- * preparing the system for security event tracking.
- *
- * Arguments:
- *   None
- *
- * Returns:
- *   Nothing (void)
- *
- ****/
-void security_audit_init(void) {
-    audit_log = fopen("/var/log/buniq-security.log", "a");
-    if (!audit_log) {
-        audit_log = stderr;
-    }
-    
-    security_audit_log("AUDIT_INIT", "Security audit initialized");
-}
 
-/****
- *
- * Log security events with timestamp and process information
- *
- * Records security-related events with structured logging
- * including timestamp, PID, event type, and details.
- *
- * Arguments:
- *   event - Type of security event (e.g., "FILE_OPEN", "AUDIT_INIT")
- *   details - Additional details about the event
- *
- * Returns:
- *   Nothing (void)
- *
- ****/
-void security_audit_log(const char *event, const char *details) {
-    if (!audit_log) {
-        return;
-    }
-    
-    time_t now = time(NULL);
-    struct tm *tm_info = localtime(&now);
-    char timestamp[26];
-    strftime(timestamp, 26, "%Y-%m-%d %H:%M:%S", tm_info);
-    
-    fprintf(audit_log, "[%s] PID:%d EVENT:%s DETAILS:%s\n", 
-            timestamp, getpid(), event ? event : "UNKNOWN", details ? details : "");
-    fflush(audit_log);
-}
 
-/****
- *
- * Clean up and close the security audit logging system
- *
- * Properly shuts down audit logging, closing log files
- * and cleaning up resources.
- *
- * Arguments:
- *   None
- *
- * Returns:
- *   Nothing (void)
- *
- ****/
-void security_audit_cleanup(void) {
-    if (audit_log && audit_log != stderr) {
-        security_audit_log("AUDIT_CLEANUP", "Security audit shutting down");
-        fclose(audit_log);
-        audit_log = NULL;
-    }
-}
 
 /****
  *
@@ -590,14 +511,12 @@ int drop_privileges(void) {
         struct passwd *nobody = getpwnam("nobody");
         if (nobody) {
             if (setgid(nobody->pw_gid) != 0 || setuid(nobody->pw_uid) != 0) {
-                security_audit_log("PRIVILEGE_DROP_FAILED", "Failed to drop privileges");
                 return -1;
             }
         }
     }
     
     privileges_dropped = 1;
-    security_audit_log("PRIVILEGE_DROP", "Privileges dropped successfully");
     return 0;
 }
 
@@ -621,12 +540,10 @@ int restore_privileges(void) {
     }
     
     if (setgid(original_gid) != 0 || setuid(original_uid) != 0) {
-        security_audit_log("PRIVILEGE_RESTORE_FAILED", "Failed to restore privileges");
         return -1;
     }
     
     privileges_dropped = 0;
-    security_audit_log("PRIVILEGE_RESTORE", "Privileges restored successfully");
     return 0;
 }
 
@@ -655,6 +572,5 @@ void secure_cleanup_temp_files(void) {
     for (int i = 0; temp_patterns[i]; i++) {
         /* This would require glob() implementation */
         /* For now, just log the cleanup attempt */
-        security_audit_log("TEMP_CLEANUP", temp_patterns[i]);
     }
 }

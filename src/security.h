@@ -124,10 +124,6 @@ void secure_free_and_null(void **ptr);
 int secure_random_bytes(unsigned char *buf, size_t len);
 void secure_clear_memory(void *ptr, size_t len);
 
-/* Security audit functions */
-void security_audit_init(void);
-void security_audit_log(const char *event, const char *details);
-void security_audit_cleanup(void);
 
 /* Privilege dropping functions */
 int drop_privileges(void);
